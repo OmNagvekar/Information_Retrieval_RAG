@@ -1,5 +1,4 @@
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_docling import DoclingLoader
 from langchain_unstructured import UnstructuredLoader
 import os
 from tqdm import tqdm
@@ -22,6 +21,7 @@ class DocLoader:
     def __init__(self,dirpath:str):
         self.dirpath=dirpath
         self.file_path=self.load_pdf_files()
+
     def load_pdf_files(self)-> list:
         """sumary_line
         Return: return list of path of pdf's in specific directory
@@ -35,7 +35,7 @@ class DocLoader:
         pdf_files = [p for p in pdf_files if os.path.isfile(p)]  # Validate paths
         return pdf_files
 
-    def load_pdf_pypdfloader(self):
+    def pypdf_loader(self):
         """sumary_line
         Simple and Fast document loader
         """
@@ -49,7 +49,7 @@ class DocLoader:
             document.append(pages)
         return document
 
-    def unstructured_loading(self):
+    def unstructured_loader(self):
         """_summary_
         better than simple pdf loader as it also includes images and other content which uses
         tesseract OCR so it takes more time than simple pdf loader
@@ -63,7 +63,7 @@ class DocLoader:
             document.append(pages)
         return document
 
-    def load_pdf_docling(self):
+    def docling_loader(self):
         """_summary_
         When to Use Docling
             1.Projects involving NLP pipelines where structured text extraction is needed.
@@ -71,6 +71,7 @@ class DocLoader:
             3.In scenarios where document metadata is as important as the content itself.
             4.For extracting domain-specific data from unstructured documents, like legal, medical, or financial reports.
         """
+        from langchain_docling import DoclingLoader
         document=[]
         for path in tqdm(self.file_path):
             loader = DoclingLoader(file_path=path)
@@ -82,17 +83,18 @@ if __name__=="__main__":
     obj = DocLoader("./PDF/")
     path=obj.load_pdf_files()
     
-    document=obj.load_pdf_pypdfloader()
+    document=obj.pypdf_loader()
     print(f"{document[0][0].metadata}\n")
     print(f"category: {document[0][0].metadata.get('category')}\n")
     print(document[0][0].page_content,"\n")
+    print(f"No of PDF:{len(path)} No of document:{len(document)}")
     # print("--------------------Docling------------------------\n")
-    # document2 = load_pdf_docling()
+    # document2 = obj.docling_loader()
     # for d in document2[0][:3]:
     #     print(f"- {d.page_content=}")
     print("\n--------------------------Unstructred loader-----------------------\n")
-    document2 = obj.unstructured_loading()
-    print(f"{document2[0][0].metadata}\n")
-    for i in range(len(document2[0])):
-        print(f"category: {document2[0][i].metadata.get('category')}\n")
-        print(document2[0][i].page_content,"\n")
+    # document2 = obj.unstructured_loader()
+    # print(f"{document2[0][0].metadata}\n")
+    # for i in range(len(document2[0])):
+    #     print(f"category: {document2[0][i].metadata.get('category')}\n")
+    #     print(document2[0][i].page_content,"\n")
