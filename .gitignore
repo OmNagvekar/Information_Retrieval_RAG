@@ -1,2 +1,3 @@
 PDF/
 __pycache__/
+faiss_index/
