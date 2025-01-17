@@ -31,6 +31,38 @@ def create_vectors():
     vector_store.save_local("faiss_index")
     return vector_store
 
+def create_prompt_template():
+    
+    examples = [
+        {
+            "input": "Detailed financial report of a tech company",
+            "output": {
+                "company_name": "TechInnovate",
+                "annual_revenue": 5000000,
+                "key_metrics": ["R&D Spending", "Market Share"]
+            }
+        },
+        # Add more examples...
+    ]
+    prompt_template = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You are an expert extraction algorithm. "
+                "Only extract relevant information from the text. "
+                "If you do not know the value of an attribute asked to extract, "
+                "return null for the attribute's value.",
+            ),
+            # Please see the how-to about improving performance with
+            # reference examples.
+            MessagesPlaceholder('history',n_messages=2),
+            MessagesPlaceholder('examples'),
+            ("human", "{text}"),
+        ]
+    )
+    
+    return prompt_template
+
 def load_vectors():
     Textprocess = ProcessText()
     vectore_store=Textprocess.load_vectors("faiss_index")
@@ -43,21 +75,8 @@ def main():
     else:
         print("\n Creating Vectore Index and Storing Locally \n")
         vectore_store = create_vectors()
-    prompt_template = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            "You are an expert extraction algorithm. "
-            "Only extract relevant information from the text. "
-            "If you do not know the value of an attribute asked to extract, "
-            "return null for the attribute's value.",
-        ),
-        # Please see the how-to about improving performance with
-        # reference examples.
-        # MessagesPlaceholder('examples'),
-        ("human", "{text}"),
-    ]
-)
+    
+    prompt_template = create_prompt_template()
         
 if __name__=="__main__":
     main()
