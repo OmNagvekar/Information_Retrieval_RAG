@@ -54,7 +54,7 @@ class ChatHistoryManager:
         self.history = []
 
 class RAGChatAssistant:
-    def __init__(self,dirpath:str="faiss_index"):
+    def __init__(self,dirpath:str="./PDF/"):
         # path to uploaded/local pdf's
         self.dirpath = dirpath
         # device agnostic code
@@ -62,7 +62,7 @@ class RAGChatAssistant:
         # chat History manager
         self.chat_history_manager = ChatHistoryManager()
         #LLM
-        self.llm = OllamaLLM(model='phi3:mini',device=device,temperature = 0.5,request_timeout=360.0)
+        self.llm = OllamaLLM(model='phi3:mini',device=device,temperature = 0.5,request_timeout=360.0,format="json")
         # Create a Pydantic output parser
         self.output_parser = PydanticOutputParser(pydantic_object=Data)
         # Loading vectore store
@@ -110,7 +110,8 @@ class RAGChatAssistant:
                     "paper_details": {
                         "title": "Memristive Devices from CuO Nanoparticles",
                         "doi": "https://doi.org/10.3390/nano10091677",
-                        "year": 2020
+                        "year": 2020,
+                        "source":"Nanoparticles.pdf"
                     }
                 }
             },
@@ -124,7 +125,8 @@ class RAGChatAssistant:
                     "paper_details": {
                         "title": "Resistive switching memory effects in p-type h-CuI/CuO heterojunctions",
                         "doi": "https://doi.org/10.1063/5.0010839",
-                        "year": 2020
+                        "year": 2020,
+                        "source":"10.pdf"
                     }
                 }
             },
@@ -137,7 +139,8 @@ class RAGChatAssistant:
                     "paper_details": {
                         "title": "Facile synthesis and nanoscale related physical properties of CuO nanostructures",
                         "doi": "https://doi.org/10.1016/j.apsusc.2019.144903",
-                        "year": 2020
+                        "year": 2020,
+                        "source":"12.pdf"
                     }
                 }
             },
@@ -153,7 +156,8 @@ class RAGChatAssistant:
                     "paper_details": {
                         "title": "Resistive Switching in HfO2-Based Devices",
                         "doi": "https://doi.org/10.1016/j.jmatpro.2021.03.012",
-                        "year": 2021
+                        "year": 2021,
+                        "source":"4.pdf"
                     }
                 }
             },
@@ -170,7 +174,8 @@ class RAGChatAssistant:
                     "paper_details": {
                         "title": "Switching Characteristics of Al2O3 Layers",
                         "doi": "https://doi.org/10.5678/j.matsci.2020.045",
-                        "year": 2020
+                        "year": 2020,
+                        "source":"Switching.pdf"
                     }
                 }
             },
@@ -187,7 +192,8 @@ class RAGChatAssistant:
                     "paper_details": {
                         "title": "Advances in TiO2-Based Resistive Switching",
                         "doi": "https://doi.org/10.9101/j.nano2020.112",
-                        "year": 2020
+                        "year": 2020,
+                        "source":"Resistive_Switching.pdf"
                     }
                 }
             },
@@ -201,7 +207,8 @@ class RAGChatAssistant:
                     "paper_details": {
                         "title": "Synthesis and Applications of CuO Nanostructures",
                         "doi": "https://doi.org/10.1021/acsnano.2020.1234",
-                        "year": 2020
+                        "year": 2020,
+                        "source":"Synthesis_and_Applications_of_CuO_Nanostructures.pdf"
                     }
                 }
             },
@@ -215,7 +222,8 @@ class RAGChatAssistant:
                     "paper_details": {
                         "title": "Unipolar Switching in Al2O3 Devices",
                         "doi": "https://doi.org/10.1007/snano.2022.008",
-                        "year": 2022
+                        "year": 2022,
+                        "source":"paper.pdf"
                     }
                 }
             },
@@ -250,7 +258,8 @@ class RAGChatAssistant:
                     "reference_information": {
                         "name_of_paper": "Switching Properties of CuO Nanoparticles",
                         "doi": "https://doi.org/10.1234/exampledoi",
-                        "year": 2022
+                        "year": 2022,
+                        "source":"1.pdf"
                     }
                 }
             }
@@ -274,7 +283,7 @@ class RAGChatAssistant:
                 # Please see the how-to about improving performance with
                 # reference examples.
                 MessagesPlaceholder(variable_name='history',n_messages=2),
-                MessagesPlaceholder(variable_name='examples'),
+                MessagesPlaceholder(variable_name='examples',n_messages=1),
                 MessagesPlaceholder(variable_name='context'),
                 ("human", "{query}")
             ]

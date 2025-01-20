@@ -23,6 +23,8 @@ class Extract_Text(BaseModel):
     paper_name: Optional[str] = Field(default=None, description="Name of the research paper.")
     doi: Optional[str] = Field(default=None, description="DOI of the research paper.")
     year: Optional[int] = Field(default=None, description="Publication year of the research paper.")
+    source: Optional[str] =Field(default=None,drescription="PDF File Name")
+    custom: Optional[str]= Field(default=None,description="contains information does not fit into the specified format but it is usefull to the user query")
     
 class Data(BaseModel):
     
