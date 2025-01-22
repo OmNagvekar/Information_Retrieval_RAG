@@ -1,6 +1,6 @@
-# Information Retrieval RAG For Data Extraction from Reserach Papers
+# # Information Retrieval RAG For Data Extraction from Reserach Papers
 
-This project provides a framework for **Retrieval-Augmented Generation (RAG)** to extract and analyze information from research papers. It uses vector-based retrieval techniques and structured LLMs to process PDF documents and retrieve insights based on user queries.
+This project is a **Retrieval-Augmented Generation (RAG)** system designed to extract scientific and technical information from research papers. The system is built to handle large-scale document processing, embedding-based retrieval, and context-aware responses, leveraging **LangChain**, **FAISS**, and **LLMs** for robust data extraction and conversational AI.
 
 ---
 
@@ -8,39 +8,63 @@ This project provides a framework for **Retrieval-Augmented Generation (RAG)** t
 
 ```plaintext
 omnagvekar-information_retrieval_rag/
-├── document_loader.py  # Handles document loading and parsing from PDFs
-├── general_schema.py   # Defines basic data schemas for extracted information
-├── main.py             # Implements the main RAG workflow
-├── scheme.py           # Contains Pydantic models for data validation and Defines data schemas for extracted information
-├── textsplitter.py     # Processes documents for embedding and vector storage
+├── document_loader.py     # Handles document loading and parsing from PDFs
+├── general_schema.py      # Defines data schemas for extracted information
+├── main.py                # Implements the main RAG workflow
+├── scheme.py              # ontains Pydantic models for data validation and Defines data schemas for extracted information
+├── textsplitter.py        # Processes and embeds text chunks for vector storage
 ```
 
 ---
 
 ## Features
 
-1. **Document Loading**:
-   - Supports structured and unstructured PDF parsing via:
-     - `PyPDFLoader` for text-heavy PDFs.
-     - `UnstructuredLoader` for complex layouts (including OCR).
-     - `DoclingLoader` for structured text extraction.
+### 1. **Document Loading**
+   - **Flexible Input Handling**:  
+     - **`PyPDFLoader`**: Fast processing for text-heavy PDFs.
+     - **`UnstructuredLoader`**: Extracts data from complex layouts, including OCR for image-based PDFs.
+     - **`DoclingLoader`**: Ideal for metadata-driven structured extraction.
+   - **Batch Processing**: Automatically scans directories for PDFs and loads them into memory.
 
-2. **Text Processing**:
-   - Splits documents into manageable chunks using `RecursiveCharacterTextSplitter`.
-   - Embeds text chunks for similarity-based retrieval using HuggingFace embeddings.
+### 2. **Text Processing**
+   - **Chunking**: Uses `RecursiveCharacterTextSplitter` to split documents into smaller, manageable chunks for better embedding and retrieval.
+   - **Embedding**: Utilizes HuggingFace's `BAAI/bge-base-en` model for generating dense embeddings compatible with FAISS.
 
-3. **Vector Storage**:
-   - Uses FAISS for efficient vector storage and similarity searches.
+### 3. **Vector Storage and Retrieval**
+   - **Storage**: Implements FAISS for fast similarity searches on vectorized document chunks.
+   - **Search Modes**: Supports Maximum Marginal Relevance (MMR) and similarity-based retrieval.
+   - **Local Storage**: Saves and loads FAISS indices for persistent retrieval capabilities.
 
-4. **RAG Pipeline**:
-   - Integrates LangChain's structured LLMs for robust response generation.
-   - Maintains chat history for context-aware responses.
-   - Extracts and validates information against a well-defined schema.
+### 4. **RAG Pipeline**
+   - **LLM Integration**: Leverages LangChain's `ChatOllama` for structured query responses.
+   - **Prompt Engineering**: Constructs custom prompts with examples, ensuring high accuracy in responses.
+   - **Schema Validation**: Ensures extracted data adheres to well-defined Pydantic models, reducing inconsistencies.
 
-5. **Custom Features**:
-   - Summarizes older chat history for efficient management.
-   - Detects conversation topics and provides analytical insights.
-   - Anonymizes sensitive data in the chat history.
+### 5. **Chat History Management**
+   - **Context-Aware Conversations**: Maintains chat history for relevant and coherent multi-turn dialogues.
+   - **Persistence**: Saves chat history as JSON files, ensuring continuity between sessions.
+   - **Search and Export**:
+     - Search past conversations by keywords.
+     - Export and backup chat history for future reference.
+
+### 6. **Analytics and Summarization**
+   - **Conversation Summarization**: Compresses older messages into concise summaries using LLMs.
+   - **Topic Modeling**: Extracts main topics using TF-IDF and NMF for better insight into chat history.
+   - **Statistics**: Provides analytics like total messages, average message length, and distribution between human and AI messages.
+
+### 7. **Scientific Data Extraction**
+   - Supports queries to extract structured information like:
+     - **Input Data**: Materials, synthesis methods, electrode types, and thicknesses.
+     - **Output Data**: Switching types, endurance cycles, retention times, memory windows, and mechanisms.
+     - **Reference Information**: Paper title, DOI, publication year, and source file path.
+
+### 8. **Custom Enhancements**
+   - **Sensitive Data Handling**:
+     - Anonymizes chat history by masking emails, phone numbers, and names.
+   - **Backup and Restore**:
+     - Automatically backs up chat histories and allows restoration from backups.
+   - **Compression**:
+     - Reduces chat history size by summarizing older messages using LangChain's summarization chains.
 
 ---
 
@@ -48,86 +72,118 @@ omnagvekar-information_retrieval_rag/
 
 ### Prerequisites
 - Python 3.11+
-- CUDA-enabled GPU (optional for faster processing)
-- Required libraries (install via `requirements.txt`):
-
+- CUDA-enabled GPU (optional for faster processing with LLMs)
+- Libraries (install via `requirements.txt`):
+  
 ```bash
 pip install -r requirements.txt
 ```
 
 ### Additional Tools
-- [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) (if using OCR with `UnstructuredLoader`).
-
+- [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR processing.
 - Note: Do not forgot to add tesseract in enviroment variable after installation (For Windows)
-
 ---
 
 ## Usage
 
-### 1. Document Preparation
-Place your PDF documents in the desired directory (default: `./PDF/`).
+### Step 1: Prepare Your Documents
+Place the research papers (PDFs) in a directory (default: `./PDF/`).
 
-### 2. Running the RAG Pipeline
-Execute the main script:
+### Step 2: Run the RAG Pipeline
+Execute the main script to start processing and querying:
 
 ```bash
 python main.py
 ```
 
-### 3. Query Examples
-The system supports complex scientific queries like:
-- **Example 1**: "Provide retention time and endurance cycles for a resistive switching device using p-type CuO."
-- **Example 2**: "Extract all switching characteristics of a device with a 5000 nm CuO layer."
+### Step 3: Query Examples
+Interact with the system using natural language queries. Examples include:
+- "Provide endurance cycles and retention time for a resistive switching device with p-type CuO."
+- "Analyze switching mechanisms for a device with 5000 nm CuO layers."
+- "Summarize memory characteristics of devices using TiO2 synthesized via PLD."
 
-### 4. Custom Configurations
-Modify parameters in `textsplitter.py` or `main.py` to customize:
-- Chunk size and overlap.
-- Embedding model and device.
+### Step 4: Manage and Analyze Chat History
+- **Save history**: Automatically saves after every session.
+- **Search history**: Use keywords to find past interactions.
+- **Summarize history**: Summarize large histories for concise context.
 
 ---
 
-## Output Structure
+## Output Format
 
-The RAG pipeline returns structured JSON output with the following format:
+The RAG system provides responses in a structured JSON format:
 
 ```json
 {
   "input_data": {
     "switching_layer_material": "CuO",
-    ...
+    "synthesis_method": "Chemical",
+    "top_electrode": "Pt",
+    "bottom_electrode": "Au",
+    "switching_layer_thickness": 5000
   },
   "output_data": {
     "type_of_switching": "Resistive",
-    ...
+    "endurance_cycles": 50000,
+    "retention_time": 10000,
+    "memory_window": 1.2
   },
   "reference_information": {
-    "name_of_paper": "Switching Properties of CuO",
+    "name_of_paper": "Switching Properties of CuO Nanoparticles",
     "doi": "https://doi.org/10.1234/exampledoi",
-    ...
+    "year": 2022,
+    "source": "paper.pdf"
   }
 }
 ```
 
 ---
 
-## Known Limitations
+## Key Classes and Methods
 
-- Processing large PDFs with OCR may be time-intensive.
-- Requires substantial memory for handling large document sets.
+### **`document_loader.py`**
+- **`DocLoader`**: Handles PDF loading and parsing.
+  - `pypdf_loader`: Basic loader for text-heavy PDFs.
+  - `unstructured_loader`: Advanced OCR-based loader.
+  - `docling_loader`: Extracts structured metadata.
+
+### **`textsplitter.py`**
+- **`ProcessText`**: Manages text splitting, embedding, and vector store creation.
+  - `splitter`: Splits documents into chunks.
+  - `embeded_documents`: Converts chunks into embeddings.
+  - `vectore_store`: Creates FAISS-based vector storage.
+
+### **`scheme.py`**
+- Defines schemas for structured data extraction.
+  - Models include `Extract_Text` and `Data` for validated output.
+
+### **`main.py`**
+- Implements the RAG pipeline.
+  - `retrieve_context`: Fetches relevant document chunks.
+  - `generate_response`: Processes queries and generates responses.
+  - `create_vectors`: Builds vector indices for retrieval.
+
+### **`general_schema.py`**
+- Houses schemas for high-level text extraction.
+  - Models include `General_Extract_Text` for basic numeric value extraction.
 
 ---
 
 ## Future Work
 
-- Implement more advanced topic modeling and summarization techniques.
-- Expand support for additional file formats (e.g., Word, Excel).
-- Enhance schema validation with nested and hierarchical data extraction.
+- Extend support for additional document formats (e.g., Word, Excel).
+- Implement dynamic schema generation for custom queries.
+- Integrate advanced summarization and sentiment analysis for chat histories.
+- Add visualization tools for insights like topic distributions.
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Submit your PRs or open issues to suggest enhancements.
+Contributions are welcome! To contribute:
+1. Fork the repository.
+2. Create a new branch.
+3. Submit a pull request with your changes.
 
 ---
 
