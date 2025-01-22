@@ -169,6 +169,32 @@ The RAG system provides responses in a structured JSON format:
 - Houses schemas for high-level text extraction.
   - Models include `General_Extract_Text` for basic numeric value extraction.
 
+### **`ChatHistory.py`**
+- **`ChatHistoryManager`**: Manages user chat history and provides tools for context-aware conversation handling.
+  - **Initialization**:
+    - `__init__`: Sets up user-specific chat history, ensuring persistence in the `chat_histories` directory.
+  - **Chat Management**:
+    - `add_user_message`: Adds a human message to the history.
+    - `add_ai_message`: Adds an AI-generated response.
+    - `clear_history`: Deletes all messages in the chat history.
+    - `get_message_history`: Retrieves the last `n` messages in LangChain format.
+    - `compress_history`: Summarizes older messages to reduce storage size.
+  - **History Insights**:
+    - `analyze_history_stats`: Provides statistics, such as total messages, average lengths, and timestamps.
+    - `detect_conversation_topics`: Extracts key topics using TF-IDF and NMF.
+  - **Persistence**:
+    - `save_history`/`_save_history`: Saves history to a JSON file.
+    - `export_history`: Exports chat history to a specified path.
+    - `restore_from_backup`: Restores history from a backup file.
+  - **Search and Filtering**:
+    - `search_history`: Searches messages by keyword, with optional case sensitivity.
+    - `get_history_by_date_range`: Filters messages within a specific date range.
+  - **Privacy and Security**:
+    - `anonymize_history`: Redacts personal data (emails, phone numbers, and names).
+  - **Backup and Restore**:
+    - `backup_history`: Backs up chat history to a timestamped file.
+    - `import_history`: Imports chat history from a backup file.
+
 ---
 
 ## Future Work
