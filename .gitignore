@@ -2,3 +2,4 @@ PDF/
 __pycache__/
 faiss_index/
 chat_histories/
+venv/
