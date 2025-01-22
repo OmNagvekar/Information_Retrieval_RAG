@@ -1,4 +1,4 @@
-# # Information Retrieval RAG For Data Extraction from Reserach Papers
+# Information Retrieval RAG For Data Extraction from Reserach Papers
 
 This project is a **Retrieval-Augmented Generation (RAG)** system designed to extract scientific and technical information from research papers. The system is built to handle large-scale document processing, embedding-based retrieval, and context-aware responses, leveraging **LangChain**, **FAISS**, and **LLMs** for robust data extraction and conversational AI.
 
