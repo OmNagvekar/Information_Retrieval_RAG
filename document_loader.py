@@ -79,22 +79,22 @@ class DocLoader:
         return document
 
 
-if __name__=="__main__":
-    obj = DocLoader("./PDF/")
-    path=obj.load_pdf_files()
+# if __name__=="__main__":
+#     obj = DocLoader("./PDF/")
+#     path=obj.load_pdf_files()
     
-    document=obj.pypdf_loader()
-    print(f"{document[0][0].metadata}\n")
-    print(f"category: {document[0][0].metadata.get('category')}\n")
-    print(document[0][0].page_content,"\n")
-    print(f"No of PDF:{len(path)} No of document:{len(document)}")
-    # print("--------------------Docling------------------------\n")
-    # document2 = obj.docling_loader()
-    # for d in document2[0][:3]:
-    #     print(f"- {d.page_content=}")
-    print("\n--------------------------Unstructred loader-----------------------\n")
-    # document2 = obj.unstructured_loader()
-    # print(f"{document2[0][0].metadata}\n")
-    # for i in range(len(document2[0])):
-    #     print(f"category: {document2[0][i].metadata.get('category')}\n")
-    #     print(document2[0][i].page_content,"\n")
+#     document=obj.pypdf_loader()
+#     print(f"{document[0][0].metadata}\n")
+#     print(f"category: {document[0][0].metadata.get('category')}\n")
+#     print(document[0][0].page_content,"\n")
+#     print(f"No of PDF:{len(path)} No of document:{len(document)}")
+#     # print("--------------------Docling------------------------\n")
+#     # document2 = obj.docling_loader()
+#     # for d in document2[0][:3]:
+#     #     print(f"- {d.page_content=}")
+#     print("\n--------------------------Unstructred loader-----------------------\n")
+#     # document2 = obj.unstructured_loader()
+#     # print(f"{document2[0][0].metadata}\n")
+#     # for i in range(len(document2[0])):
+#     #     print(f"category: {document2[0][i].metadata.get('category')}\n")
+#     #     print(document2[0][i].page_content,"\n")
