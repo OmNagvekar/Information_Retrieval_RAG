@@ -13,6 +13,7 @@ omnagvekar-information_retrieval_rag/
 ├── main.py                # Implements the main RAG workflow
 ├── scheme.py              # ontains Pydantic models for data validation and Defines data schemas for extracted information
 ├── textsplitter.py        # Processes and embeds text chunks for vector storage
+├── ChatHistory.py         # Contains code to manage history
 ```
 
 ---
