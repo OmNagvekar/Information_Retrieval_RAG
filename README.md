@@ -14,6 +14,7 @@ omnagvekar-information_retrieval_rag/
 ├── scheme.py              # ontains Pydantic models for data validation and Defines data schemas for extracted information
 ├── textsplitter.py        # Processes and embeds text chunks for vector storage
 ├── ChatHistory.py         # Contains code to manage history
+├── LICENSE                # Added LICENSE File
 ```
 
 ---
