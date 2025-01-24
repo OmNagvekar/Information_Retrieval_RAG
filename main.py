@@ -309,7 +309,8 @@ class RAGChatAssistant:
             print(f"Error generating response: {e}")
             return {
                 "response": "I'm sorry, I couldn't process your request.",
-                "context_docs": []
+                "context_docs": [],
+                "validated_output":""
             }
         
 if __name__=="__main__":
