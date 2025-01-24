@@ -9,7 +9,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 class ProcessText:
-    def __init__(self,chunk_size:int=500,chunk_overlap:int=5,embed_model:str = 'BAAI/bge-base-en',device='cpu'):
+    def __init__(self,chunk_size:int=512,chunk_overlap:int=20,embed_model:str = 'BAAI/bge-base-en',device='cpu'):
         self.chunk_size= chunk_size
         self.chunk_overlap= chunk_overlap
         self.embed_model = HuggingFaceEmbeddings(
