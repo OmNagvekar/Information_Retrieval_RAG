@@ -40,6 +40,11 @@ def delete_old_logs():
                                 os.remove(file_path)
                                 logging.info(f"Deleted old log: {filename}")
 
+                    # If log is older than 3 day
+                    if now - file_date > timedelta(days=3):
+                        os.remove(file_path)
+                        logging.info(f"Deleted old log: {filename}")
+
         except Exception as e:
             logging.error(f"Error in log cleanup: {e}")
 

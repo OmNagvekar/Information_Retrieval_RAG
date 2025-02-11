@@ -72,6 +72,7 @@ omnagvekar-information_retrieval_rag/
 ### 9. **Logging & Error Handling**
   - Implements structured logging for debugging and performance monitoring.
   - Deletes old logs automatically if they do not contain errors.
+  - If log is older than 3 days then it deletes the log even if log contain errors
 
 ---
 
