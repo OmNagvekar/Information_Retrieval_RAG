@@ -70,8 +70,8 @@ omnagvekar-information_retrieval_rag/
      - Reduces chat history size by summarizing older messages using LangChain's summarization chains.
   
 ### 9. **Logging & Error Handling**
-    - Implements structured logging for debugging and performance monitoring.
-    - Deletes old logs automatically if they do not contain errors.
+  - Implements structured logging for debugging and performance monitoring.
+  - Deletes old logs automatically if they do not contain errors.
 
 ---
 
@@ -118,7 +118,7 @@ Interact with the system using natural language queries. Examples include:
 
 ## Output Format
 
-The RAG system provides responses in a structured JSON format:
+The RAG system provides responses in a structured JSON format (Sample output. Output will not be always be in this format):
 
 ```json
 {
