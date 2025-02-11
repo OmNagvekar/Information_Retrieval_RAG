@@ -4,3 +4,5 @@ faiss_index/
 chat_histories/
 venv/
 filtered_output/
+*.log
+Logs/
