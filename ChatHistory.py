@@ -5,7 +5,8 @@ from langchain_core.messages import HumanMessage, AIMessage
 from typing import List, Dict, Any
 from langchain_ollama.chat_models import ChatOllama
 import os
-
+import logging
+logger = logging.getLogger(__name__)
 
 class ChatHistoryManager:
     def __init__(self, user_id: str, base_dir: str = 'chat_histories'):
@@ -18,10 +19,11 @@ class ChatHistoryManager:
         self.user_id = user_id
         self.base_dir = base_dir
         self.history: List[Dict[str, Any]] = []
+        logger.info("Initializing ChatHistoryManager for user %s", user_id)
         
         # Create base directory if it doesn't exist
         os.makedirs(base_dir, exist_ok=True)
-        
+        logger.info("Base directory '%s' ensured for chat histories.", base_dir)
         # Load existing history if it exists
         self._load_history()
 
@@ -31,6 +33,7 @@ class ChatHistoryManager:
         
         :return: Full path to the user's chat history JSON file
         """
+        logger.debug("Chat history file path: %s", os.path.join(self.base_dir, f"{self.user_id}_chat_history.json"))
         return os.path.join(self.base_dir, f"{self.user_id}_chat_history.json")
 
     def add_user_message(self, message: str,save_hist=False):
@@ -39,6 +42,7 @@ class ChatHistoryManager:
         
         :param message: User's message content
         """
+        logger.info("Adding user message.")
         self.history.append({
             "role": "human",
             "content": message,
@@ -47,6 +51,7 @@ class ChatHistoryManager:
 
         if save_hist:
             self._save_history()
+            logger.info("Chat history saved after adding user message.")
 
     def add_ai_message(self, message: str,save_hist=False):
         """
@@ -54,6 +59,7 @@ class ChatHistoryManager:
         
         :param message: AI's message content
         """
+        logger.info("Adding AI message.")
         self.history.append({
             "role": "ai",
             "content": message,
@@ -62,29 +68,39 @@ class ChatHistoryManager:
 
         if save_hist:
             self._save_history()
+            logger.info("Chat history saved after adding AI message.")
 
     def save_history(self):
+        logger.info("Saving chat history.")
         self._save_history()
+        logger.info("Chat history saved.")
 
     def _load_history(self):
         """
         Load chat history from JSON file
         """
         file_path = self._get_history_file_path()
+        logger.info("Loading chat history from %s", file_path)
         try:
             with open(file_path, 'r') as f:
                 self.history = json.load(f)
+                logger.info("Chat history loaded successfully. Total messages: %d", len(self.history))
         except FileNotFoundError:
             # Initialize empty history if file doesn't exist
             self.history = []
+            logger.error("Error loading chat history: %s", e, exc_info=True)
 
     def _save_history(self):
         """
         Save chat history to JSON file
         """
         file_path = self._get_history_file_path()
-        with open(file_path, 'w') as f:
-            json.dump(self.history, f, indent=4)
+        try:
+            with open(file_path, 'w') as f:
+                json.dump(self.history, f, indent=4)
+            logger.info("Chat history saved to %s", file_path)
+        except Exception as e:
+            logger.error("Failed to save chat history to %s: %s", file_path, e, exc_info=True)
 
     def get_message_history(self, limit: int = None):
         """
@@ -93,9 +109,9 @@ class ChatHistoryManager:
         :param limit: Optional limit on number of messages to return
         :return: List of message objects
         """
+        logger.info("Retrieving message history with limit: %s", limit)
         # If limit is specified, slice the history
         history_to_convert = self.history[-limit:] if limit else self.history
-        
         return [
             HumanMessage(content=msg['content']) if msg['role'] == 'human' 
             else AIMessage(content=msg['content']) 
@@ -106,12 +122,16 @@ class ChatHistoryManager:
         """
         Clear the entire chat history for the user
         """
+        logger.info("Clearing chat history for user %s", self.user_id)
         self.history = []
         file_path = self._get_history_file_path()
         
         # Remove the history file if it exists
         if os.path.exists(file_path):
             os.remove(file_path)
+            logger.info("Chat history file %s removed.", file_path)
+        else:
+            logger.info("No chat history file found to remove.")
 
     @classmethod
     def list_user_histories(cls, base_dir: str = 'chat_histories') -> List[str]:
@@ -121,10 +141,12 @@ class ChatHistoryManager:
         :param base_dir: Directory containing chat history files
         :return: List of user IDs with chat histories
         """
+        logger.info("Listing all user chat histories in directory: %s", base_dir)
         try:
             # Check if base directory exists
             if not os.path.exists(base_dir):
                 os.makedirs(base_dir)
+                logger.info("Base directory '%s' did not exist. Created new one.", base_dir)
                 return []
 
             # List all files in the directory
@@ -136,14 +158,16 @@ class ChatHistoryManager:
                 for filename in files 
                 if filename.endswith('_chat_history.json')
             ]
-            
+            logger.info("Found %d user chat histories.", len(user_histories))
             return user_histories
         
         except PermissionError:
+            logger.error("Permission denied to access directory: %s", base_dir)
             print(f"Permission denied to access directory: {base_dir}")
             return []
         
         except Exception as e:
+            logger.error("An error occurred while listing user histories: %s", e, exc_info=True)
             print(f"An error occurred while listing user histories: {e}")
             return []
     
@@ -153,6 +177,7 @@ class ChatHistoryManager:
         
         :return: Total number of messages in history
         """
+        logger.info("Chat history size for user %s: %d", self.user_id, len(self.history))
         return len(self.history)
 
     def get_last_message(self,n_messages:int=2) -> Dict[str, str]:
@@ -161,6 +186,7 @@ class ChatHistoryManager:
         
         :return: Last message dictionary or None if history is empty
         """
+        logger.info("Retrieving last %d message(s) for user %s", n_messages, self.user_id)
         return self.history[-(n_messages)] if self.history else None
 
     def search_history(self, keyword: str, case_sensitive: bool = False) -> List[Dict[str, str]]:
@@ -171,6 +197,7 @@ class ChatHistoryManager:
         :param case_sensitive: Whether the search should be case-sensitive
         :return: List of messages matching the keyword
         """
+        logger.info("Searching chat history for keyword '%s' (case_sensitive=%s)", keyword, case_sensitive)
         if not case_sensitive:
             keyword = keyword.lower()
         
@@ -188,6 +215,7 @@ class ChatHistoryManager:
                              If None, uses a default path with timestamp
         :return: Path of the exported file
         """
+        logger.info("Exporting chat history for user %s", self.user_id)
         if export_path is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             export_path = os.path.join(
@@ -197,7 +225,7 @@ class ChatHistoryManager:
         
         with open(export_path, 'w') as f:
             json.dump(self.history, f, indent=4)
-        
+        logger.info("Chat history exported to %s", export_path)
         return export_path
 
     @classmethod
@@ -210,6 +238,7 @@ class ChatHistoryManager:
         :param base_dir: Base directory for storing chat histories
         :return: ChatHistoryManager instance with imported history
         """
+        logger.info("Importing chat history for user %s from %s", user_id, import_path)
         # Create an instance of the class
         history_manager = cls(user_id, base_dir)
         
@@ -220,7 +249,7 @@ class ChatHistoryManager:
         # Set the history and save
         history_manager.history = imported_history
         history_manager._save_history()
-        
+        logger.info("Chat history imported and saved for user %s", user_id)
         return history_manager
 
     def get_history_by_date_range(self, start_date: str = None, end_date: str = None) -> List[Dict[str, str]]:
@@ -234,6 +263,7 @@ class ChatHistoryManager:
         from datetime import datetime
 
         filtered_history = self.history
+        logger.info("Filtering chat history for user %s by date range: %s to %s", self.user_id, start_date, end_date)
 
         if start_date:
             start = datetime.fromisoformat(start_date)
@@ -248,7 +278,7 @@ class ChatHistoryManager:
                 msg for msg in filtered_history 
                 if datetime.fromisoformat(msg.get('timestamp', '')) <= end
             ]
-
+        logger.info("Filtered history contains %d messages", len(filtered_history))
         return filtered_history
 
     def analyze_history_stats(self) -> Dict[str, Any]:
@@ -257,6 +287,7 @@ class ChatHistoryManager:
         
         :return: Dictionary of chat history statistics
         """
+        logger.info("Analyzing chat history statistics for user %s", self.user_id)
         return {
             'total_messages': len(self.history),
                         'human_messages': sum(1 for msg in self.history if msg['role'] == 'human'),
@@ -278,37 +309,42 @@ class ChatHistoryManager:
         :param compression_threshold: Number of messages after which compression begins
         :return: Compressed history
         """
+        logger.info("Compressing chat history for user %s with threshold %d", self.user_id, compression_threshold)
         if len(self.history) <= compression_threshold:
             return self.history
+        try:
+            # Use an LLM to summarize older messages
+            from langchain.chains.summarize import load_summarize_chain
+            from langchain.docstore.document import Document
 
-        # Use an LLM to summarize older messages
-        from langchain.chains.summarize import load_summarize_chain
-        from langchain.docstore.document import Document
+            llm = ChatOllama(model='phi3:mini',temperature = 0.5,request_timeout=360.0)
+            
+            # Convert older messages to Documents
+            docs = [
+                Document(page_content=msg['content'], metadata={'role': msg['role']}) 
+                for msg in self.history[:len(self.history) - compression_threshold]
+            ]
+            logger.info("Summarizing %d messages for compression", len(docs))
+            # Summarize the documents
+            chain = load_summarize_chain(llm, chain_type="map_reduce")
+            summary = chain.run(docs)
+            logger.info("Summary obtained: %s", summary)
+            # Keep the recent messages and add the summary
+            compressed_history = [
+                {
+                    'role': 'system',
+                    'content': f"Compressed history summary: {summary}",
+                    'timestamp': self.history[compression_threshold-1]['timestamp']
+                }
+            ] + self.history[compression_threshold:]
 
-        llm = ChatOllama(model='phi3:mini',temperature = 0.5,request_timeout=360.0)
-        
-        # Convert older messages to Documents
-        docs = [
-            Document(page_content=msg['content'], metadata={'role': msg['role']}) 
-            for msg in self.history[:len(self.history) - compression_threshold]
-        ]
-
-        # Summarize the documents
-        chain = load_summarize_chain(llm, chain_type="map_reduce")
-        summary = chain.run(docs)
-
-        # Keep the recent messages and add the summary
-        compressed_history = [
-            {
-                'role': 'system',
-                'content': f"Compressed history summary: {summary}",
-                'timestamp': self.history[compression_threshold-1]['timestamp']
-            }
-        ] + self.history[compression_threshold:]
-
-        self.history = compressed_history
-        self._save_history()
-        return self.history
+            self.history = compressed_history
+            self._save_history()
+            logger.info("Chat history compressed and saved successfully")
+            return self.history
+        except Exception as e:
+            logger.error("Error compressing chat history: %s", e, exc_info=True)
+            return self.history
 
     def detect_conversation_topics(self, top_n: int = 3):
         """
@@ -319,7 +355,7 @@ class ChatHistoryManager:
         """
         from sklearn.feature_extraction.text import TfidfVectorizer
         from sklearn.decomposition import NMF
-
+        logger.info("Detecting conversation topics for user %s with top_n=%d", self.user_id, top_n)
         # Prepare text for topic modeling
         texts = [msg['content'] for msg in self.history]
         
@@ -354,7 +390,7 @@ class ChatHistoryManager:
         """
         from datetime import datetime
         import shutil
-
+        logger.info("Creating backup of chat history for user %s", self.user_id)
         # Use default backup directory if not specified
         if backup_dir is None:
             backup_dir = os.path.join(self.base_dir, 'backups')
@@ -370,7 +406,7 @@ class ChatHistoryManager:
         # Copy the current history file to backup location
         original_file = self._get_history_file_path()
         shutil.copy2(original_file, backup_path)
-        
+        logger.info("Backup created at %s", backup_path)
         return backup_path
 
     def restore_from_backup(self, backup_path: str):
@@ -379,6 +415,7 @@ class ChatHistoryManager:
         
         :param backup_path: Path to the backup file to restore
         """
+        logger.info("Restoring chat history for user %s from backup %s", self.user_id, backup_path)
         # Validate backup file exists
         if not os.path.exists(backup_path):
             raise FileNotFoundError(f"Backup file not found: {backup_path}")
@@ -390,6 +427,7 @@ class ChatHistoryManager:
         # Restore history
         self.history = backup_history
         self._save_history()
+        logger.info("Chat history restored successfully from %s", backup_path)
 
     def get_conversation_context(self, num_recent_messages: int = 5) -> List[Dict[str, str]]:
         """
@@ -398,6 +436,7 @@ class ChatHistoryManager:
         :param num_recent_messages: Number of most recent messages to return
         :return: List of recent messages
         """
+        logger.info("Retrieving conversation context for user %s, last %d messages", self.user_id, num_recent_messages)
         return self.history[-num_recent_messages:]
 
     def anonymize_history(self) -> List[Dict[str, str]]:
@@ -407,7 +446,7 @@ class ChatHistoryManager:
         :return: Anonymized chat history
         """
         import re
-        
+        logger.info("Anonymizing chat history for user %s", self.user_id)
         anonymized_history = []
         for msg in self.history:
             anonymized_msg = msg.copy()
@@ -422,6 +461,6 @@ class ChatHistoryManager:
             anonymized_msg['content'] = re.sub(r'\b[A-Z][a-z]+ [A-Z][a-z]+\b', '[NAME REDACTED]', anonymized_msg['content'])
             
             anonymized_history.append(anonymized_msg)
-        
+        logger.info("Anonymization complete for user %s", self.user_id)
         return anonymized_history
 
