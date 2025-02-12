@@ -10,7 +10,8 @@ This project is a **Retrieval-Augmented Generation (RAG)** system designed to ex
 omnagvekar-information_retrieval_rag/
 ├── document_loader.py     # Handles document loading and parsing from PDFs
 ├── general_schema.py      # Defines data schemas for extracted information
-├── main.py                # Implements the main RAG workflow
+├── rag_assistant.py       # Core RAG Assistant
+├── main.py                # Execution script
 ├── scheme.py              # ontains Pydantic models for data validation and Defines data schemas for extracted information
 ├── textsplitter.py        # Processes and embeds text chunks for vector storage
 ├── ChatHistory.py         # Contains code to manage history
@@ -67,6 +68,11 @@ omnagvekar-information_retrieval_rag/
      - Automatically backs up chat histories and allows restoration from backups.
    - **Compression**:
      - Reduces chat history size by summarizing older messages using LangChain's summarization chains.
+  
+### 9. **Logging & Error Handling**
+  - Implements structured logging for debugging and performance monitoring.
+  - Deletes old logs automatically if they do not contain errors.
+  - If log is older than 3 days then it deletes the log even if log contain errors
 
 ---
 
@@ -113,7 +119,7 @@ Interact with the system using natural language queries. Examples include:
 
 ## Output Format
 
-The RAG system provides responses in a structured JSON format:
+The RAG system provides responses in a structured JSON format (Sample output. Output will not be always be in this format):
 
 ```json
 {
@@ -143,6 +149,14 @@ The RAG system provides responses in a structured JSON format:
 
 ## Key Classes and Methods
 
+### **`rag_assistant.py (Core RAG System)`**
+- **`RAGChatAssistant`**: Handles document retrieval and response generation.
+- **`Methods:`**:
+    - `create_vectors()`: Processes PDFs, extracts text, generates embeddings, and stores them in FAISS.
+    - `retrieve_context()`: Retrieves relevant text chunks based on query similarity.
+    - `generate_response()`: Uses ChatOllama to produce structured, schema-validated responses.
+    - `create_prompt_template()`: Generates contextual prompts for better response accuracy.
+
 ### **`document_loader.py`**
 - **`DocLoader`**: Handles PDF loading and parsing.
   - `pypdf_loader`: Basic loader for text-heavy PDFs.
@@ -160,10 +174,8 @@ The RAG system provides responses in a structured JSON format:
   - Models include `Extract_Text` and `Data` for validated output.
 
 ### **`main.py`**
-- Implements the RAG pipeline.
-  - `retrieve_context`: Fetches relevant document chunks.
-  - `generate_response`: Processes queries and generates responses.
-  - `create_vectors`: Builds vector indices for retrieval.
+- Initializes RAGChatAssistant and executes sample queries.
+- Manages log cleanup and error handling.
 
 ### **`general_schema.py`**
 - Houses schemas for high-level text extraction.
@@ -206,6 +218,13 @@ The RAG system provides responses in a structured JSON format:
 
 ---
 
+## Logging & Debugging
+
+- Logs are stored in the Logs/ directory.
+- Automatic cleanup deletes logs older than 1 day if no errors are found.
+
+---
+
 ## Contributing
 
 Contributions are welcome! To contribute:
@@ -218,5 +237,15 @@ Contributions are welcome! To contribute:
 ## License
 
 This project is licensed under the [GPL-3.0 license](LICENSE).
+
+---
+
+## Contact
+
+For any questions or suggestions, feel free to contact on below Contact details:
+
+- Om Nagvekar Portfolio Website, Email: https://omnagvekar.github.io/ , omnagvekar29@gmail.com
+- GitHub Profile:
+   - Om Nagvekar: https://github.com/OmNagvekar
 
 ---
