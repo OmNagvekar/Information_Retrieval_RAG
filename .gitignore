@@ -1,8 +1,9 @@
 PDF/
 __pycache__/
-faiss_index/
+chroma_db/
 chat_histories/
 venv/
 filtered_output/
 *.log
 Logs/
+/gemini_key.txt

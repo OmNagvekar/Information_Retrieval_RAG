@@ -13,12 +13,17 @@ from langchain_core.output_parsers import PydanticOutputParser
 import torch
 import json
 import logging
+import difflib
 from ChatHistory import ChatHistoryManager
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain.retrievers import SelfQueryRetriever, MultiQueryRetriever, EnsembleRetriever
+from langchain.chains.query_constructor.base import AttributeInfo
+import asyncio
 
 logger = logging.getLogger(__name__)
 
 class RAGChatAssistant:
-    def __init__(self,user_id:str,dirpath:str="./PDF/"):
+    def __init__(self,user_id:str,dirpath:str="./PDF/",remote_llm:bool=False,ollama_model:str='phi3:mini'):
         logger.info("Initializing RAGChatAssistant")
         # path to uploaded/local pdf's
         self.dirpath = dirpath
@@ -27,29 +32,47 @@ class RAGChatAssistant:
         logger.info(f"Using device: {self.device}")
         # chat History manager
         self.chat_history_manager = ChatHistoryManager(user_id=user_id)
+        # Intializing objects
+        self.Textprocess = ProcessText(device=self.device)
+        self.document_loader = DocLoader(self.dirpath,filter_text=True)
+        self.pdf_files =[os.path.basename(pdfs) for pdfs in self.document_loader.file_path]
         #LLM
-        self.llm = ChatOllama(model='phi3:mini',device=self.device,temperature = 0.5,request_timeout=360.0,format='json')
-        logger.info("LLM initialized with phi3:mini")
+        self.remote_llm =remote_llm
+        if remote_llm:
+            try:
+                with open("gemini_key.txt",'r') as f:
+                    key = f.read()
+                llm = ChatGoogleGenerativeAI(model='gemini-1.5-flash',max_retries=4,google_api_key=key,disable_streaming=False,convert_system_message_to_human=True)
+                self.llm = llm.with_structured_output(Data)
+                self.llm2 =llm
+                logger.info("LLM initialized with gemini-1.5-flash")
+            except Exception as e:
+                logger.error("Failed to intialize the Gemini LLM gemini-1.5-flash %s",str(e))
+                self.llm = ChatOllama(model=ollama_model,device=self.device,temperature = 0.5,request_timeout=360.0,format='json')
+                self.llm2 =ChatOllama(model=ollama_model,device=self.device,temperature = 0.5,request_timeout=360.0)
+                logger.info(f"LLM initialized with {ollama_model}")
+                self.remote_llm=False
+        else:
+            self.llm = ChatOllama(model=ollama_model,device=self.device,temperature = 0.5,request_timeout=360.0,format='json')
+            self.llm2 =ChatOllama(model=ollama_model,device=self.device,temperature = 0.5,request_timeout=360.0)
+            logger.info(f"LLM initialized with {ollama_model}")
         # Pydantic output parser
         self.output_parser = PydanticOutputParser(pydantic_object=Data)
         # Structured LLM
         self.structured_llm = self.llm.with_structured_output(schema=Data)
         # Loading vectore store
-        if os.path.exists("./faiss_index"):
+        if os.path.exists("./chroma_db"):
             print("\n Skipping creating indexes as local index is present \n")
-            logger.info("Local FAISS index found. Loading existing vectors.")
-            self.vectore_store = self.load_vectors()
+            logger.info("Local Chroma index found. Loading existing vectors.")
+            self.vectore_store = self.load_vectors(self.Textprocess)
         else:
             print("\n Creating Vectore Index and Storing Locally \n")
-            logger.info("No existing FAISS index found. Creating new vector index.")
-            self.vectore_store = self.create_vectors()
+            logger.info("No existing Chroma index found. Creating new vector index.")
+            self.vectore_store = self.create_vectors(self.document_loader,self.Textprocess)
 
-    def create_vectors(self):
+    def create_vectors(self,document_loader: DocLoader,Textprocess: ProcessText):
         logger.info("Starting vector creation process.")
-        document_loader = DocLoader(self.dirpath,filter_text=True)
         document = document_loader.pypdf_loader()
-        
-        Textprocess = ProcessText(device=self.device)
         vector_store = Textprocess.vectore_store()
         
         for doc in tqdm(document):
@@ -69,8 +92,7 @@ class RAGChatAssistant:
                 for chunk in processed_text
             ]
             vector_store.add_documents(doc_objects)
-        vector_store.save_local("faiss_index")
-        logger.info("Vector store saved locally as 'faiss_index'.")
+        logger.info("Vector store saved locally as 'Chromadb'.")
         return vector_store
 
     def create_prompt_template(self):
@@ -270,28 +292,107 @@ class RAGChatAssistant:
                 MessagesPlaceholder(variable_name='context'),
             ]
         ).partial(format_instructions=self.output_parser.get_format_instructions())
-        
         return prompt_template,example_messages
 
-    def load_vectors(self):
-        Textprocess = ProcessText(device=self.device)
-        vectore_store=Textprocess.load_vectors("faiss_index")
-        logger.info("Loading vectors from FAISS index.")
+    def load_vectors(self,Textprocess: ProcessText):
+        vectore_store=Textprocess.load_vectors()
+        logger.info("Loading vectors from Chroma index.")
         return vectore_store
     
     def retrieve_context(self, query:str, top_k=5,simalirity=False):
         """Retrieve relevant documents from vector store"""
-        logger.info(f"Retrieving context")
-        if simalirity:
-            return self.vectore_store.similarity_search(query,k=top_k)
-        retriever = self.vectore_store.as_retriever(search_type="mmr", search_kwargs={"k": top_k})
-        return retriever.invoke(query)
+        logger.info("Retrieving context")
+        # 🧠 **Self-Query Retriever (Filtering)**
+        metadata_field_info = [
+            AttributeInfo(
+                name="id",
+                description="The unique identifier of the document page.",
+                type="string",
+            ),
+            AttributeInfo(
+                name="source",
+                description="The filename or source of the document, typically in PDF format.",
+                type="string",
+            ),
+            AttributeInfo(
+                name="title",
+                description="The title of the document or research paper.",
+                type="string",
+            ),
+            AttributeInfo(
+                name="total_pages",
+                description="The total number of pages in the document.",
+                type="integer",
+            ),
+            AttributeInfo(
+                name="doi",
+                description="The Digital Object Identifier (DOI) of the research paper, if available.",
+                type="string",
+            ),
+        ]
+        doc =[]
+        for pdf in self.pdf_files:
+            query_retriever = SelfQueryRetriever.from_llm(
+                    llm=self.llm2,
+                    vectorstore=self.vectore_store,
+                    document_contents="Extracted text from a chemistry research papers",
+                    metadata_field_info=metadata_field_info,
+                    search_kwargs={"k": top_k, "filter": {"source": pdf}}
+                )
+            # 🔍 **Multi-Query Retriever (Diverse Queries)**
+            multi_query_retriever = MultiQueryRetriever.from_llm(
+                retriever=query_retriever,
+                llm=self.llm2
+            )
+            # 🎯 **Ensemble Retriever (Combining Both)**
+            ensemble_retriever = EnsembleRetriever(
+                retrievers=[query_retriever, multi_query_retriever],
+                weights=[0.5, 0.5]
+            )
+            # Retrieve documents
+            documents = asyncio.run(ensemble_retriever.ainvoke(query))
+            # print(f"Total documents retrieved from 1.pdf: {len(documents)}\n")
+            # print(documents)
+            doc.append(documents)
+        return doc
+    
+    def clear_chat_history(self):
+        self.chat_history_manager.clear_history()
+    
+    def retrieve_best_example(self, query: str, examples: List[Any]) -> List[Any]:
+        """
+        Select the best matching example pair from the provided examples based on the query.
+        The examples list is expected to have pairs of messages (HumanMessage then AIMessage).
+        
+        :param query: The user's query.
+        :param examples: List of example messages (alternating Human and AI messages).
+        :return: A list containing a pair [HumanMessage, AIMessage] that best matches the query.
+        """
+        logger.info("Retrieving best matching example for query")
+        best_example = None
+        best_ratio = 0.0
+        
+        # Iterate over examples in pairs (even index = HumanMessage, odd index = AIMessage)
+        for i in range(0, len(examples), 2):
+            human_msg = examples[i]
+            ratio = difflib.SequenceMatcher(None, query.lower(), human_msg.content.lower()).ratio()
+            if ratio > best_ratio:
+                best_ratio = ratio
+                best_example = examples[i:i+2]
+                
+        if best_example:
+            logger.info("Selected example with similarity ratio %.2f", best_ratio)
+            return best_example
+        else:
+            logger.warning("No matching example found; returning default example.")
+            return examples[0:2]
     
     def generate_response(self, query:str):
         logger.info(f"Generating response")
         """Generate response with RAG and chat history"""
         # Retrieve context
         context_docs = self.retrieve_context(query,simalirity=True)
+        context_docs = context_docs[0]
         context_messages = [
                 HumanMessage(content=doc.page_content)
                 for doc in context_docs
@@ -299,13 +400,15 @@ class RAGChatAssistant:
 
         # Create prompt template
         prompt_template, example_messages = self.create_prompt_template()
-        # Prepare chain
-        chain = prompt_template | self.llm
+        best_example = self.retrieve_best_example(query,example_messages)
+        
         
         try:
+            # Prepare chain
+            chain = prompt_template | self.llm
             response = chain.invoke({
                 "history": self.chat_history_manager.get_message_history(limit=2),
-                "examples": example_messages,
+                "examples": best_example,
                 "context":context_messages,
                 "query": query
             })

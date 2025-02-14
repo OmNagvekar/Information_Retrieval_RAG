@@ -85,7 +85,7 @@ class ChatHistoryManager:
             with open(file_path, 'r') as f:
                 self.history = json.load(f)
                 logger.info("Chat history loaded successfully. Total messages: %d", len(self.history))
-        except FileNotFoundError:
+        except FileNotFoundError as e:
             # Initialize empty history if file doesn't exist
             self.history = []
             logger.error("Error loading chat history: %s", e, exc_info=True)

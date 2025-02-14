@@ -39,6 +39,13 @@ def delete_old_logs():
                             if "ERROR" not in content:
                                 os.remove(file_path)
                                 logging.info(f"Deleted old log: {filename}")
+                            else:
+                                # Split content into lines and filter error lines
+                                error_lines = [line for line in content.splitlines() if "ERROR" in line]
+                                # If errors are present but all of them are the memory error, delete the file.
+                                if error_lines and all("model requires more system memory" in line for line in error_lines):
+                                    os.remove(file_path)
+                                    logging.info(f"Deleted old log (only memory error present): {filename}")
 
                     # If log is older than 3 day
                     if now - file_date > timedelta(days=3):
@@ -54,6 +61,7 @@ if __name__=="__main__":
     cleanup_thread = threading.Thread(target=delete_old_logs, daemon=True)
     cleanup_thread.start()
     obj = RAGChatAssistant(user_id="abc_123")
+    # obj.clear_chat_history()
     result = obj.generate_response("""
         Extract the following data from the provided PDF and present it in a table: 
         (1) Input Data: switching layer material (TYM_Class), Synthesis method (SM_Class), Top electrode (TE_Class), Thickness of Top electrode (TTE in nm), Bottom electrode (BE_Class), Thickness of bottom electrode (TBE in nm), Thickness of switching layer (TSL in nm); (2) Output Data: Type of Switching (TSUB_Class), Endurance (Cycles) (EC), Retention Time (RT in seconds), Memory Window (MW in V), No. of states (MRS_Class), Conduction mechanism type (CM_Class), Resistive Switching mechanism (RSM_Class);
