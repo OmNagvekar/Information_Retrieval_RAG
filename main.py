@@ -91,10 +91,38 @@ if __name__=="__main__":
     obj = RAGChatAssistant(user_id="abc_123",remote_llm=True)
     # obj.clear_chat_history()
     result = obj.generate_response("""
-        Extract the following data from the provided PDF and present it in a table: 
-        (1) Input Data: switching layer material (TYM_Class), Synthesis method (SM_Class), Top electrode (TE_Class), Thickness of Top electrode (TTE in nm), Bottom electrode (BE_Class), Thickness of bottom electrode (TBE in nm), Thickness of switching layer (TSL in nm); (2) Output Data: Type of Switching (TSUB_Class), Endurance (Cycles) (EC), Retention Time (RT in seconds), Memory Window (MW in V), No. of states (MRS_Class), Conduction mechanism type (CM_Class), Resistive Switching mechanism (RSM_Class);
-        (3) Reference Information: Name of the paper, DOI, Year. Ensure all data is extracted in the specified categories and format
-    """
+        Please read the provided PDF thoroughly and extract the following quantities. Your output must be a table with two columns: "Quantity" and "Extracted Value". For each of the items listed below, provide the extracted value exactly as it appears in the document. If an item is not found, simply enter "N/A" for that field. Ensure that any numerical values include their associated units (if applicable) and that you handle multiple values consistently.
+
+        Extract the following items:
+        - Switching layer material
+        - Synthesis method
+        - Top electrode
+        - Thickness of top electrode in nanometers
+        - Bottom electrode
+        - Thickness of bottom electrode in nanometers
+        - Thickness of switching layer in nanometers
+        - Type of switching
+        - Endurance
+        - Retention time in seconds
+        - Memory window in volts
+        - Number of states
+        - Conduction mechanism type
+        - Resistive switching mechanism
+        - Paper name
+        - DOI
+        - Publication year
+        - Source (pdf file name)
+
+        Instructions:
+        1. Analyze the entire PDF document to locate all references to the above items.
+        2. Extract each quantity with precision; include any units and relevant details.
+        3. If multiple values are present for a single item, list them clearly (e.g., separated by commas).
+        4. Format your output strictly as a table with two columns: one for the "Quantity" and one for the "Extracted Value".
+        5. Do not include any extra text, headings, or commentary—only the table is required.
+        6. If an item cannot be found, record it as "N/A" in the "Extracted Value" column.
+
+        Please provide your final answer as the completed table.
+        """
     )
     # print("\nAssistant:", result['response'])
     # print("\nContext:",result["context_docs"])

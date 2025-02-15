@@ -88,7 +88,14 @@ class ChatHistoryManager:
         except FileNotFoundError as e:
             # Initialize empty history if file doesn't exist
             self.history = []
-            logger.error("Error loading chat history: %s", e, exc_info=True)
+            logger.info("Error loading chat history: %s", e, exc_info=True)
+            file_path = self._get_history_file_path()
+            try:
+                with open(file_path, 'w') as f:
+                    json.dump(self.history, f, indent=4)
+                logger.info("Chat history saved to %s", file_path)
+            except Exception as e:
+                logger.error("Failed to save chat history to %s: %s", file_path, e, exc_info=True)
 
     def _save_history(self):
         """

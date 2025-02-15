@@ -364,7 +364,7 @@ class RAGChatAssistant:
             return ensemble_retriever.invoke(query)
         doc =[]
         print("\nLoading context from\n")
-        for pdf in tqdm(self.pdf_files[:2]):
+        for pdf in tqdm(self.pdf_files):
             try:
                 query_retriever = SelfQueryRetriever.from_llm(
                         llm=self.llm2,
@@ -454,6 +454,7 @@ class RAGChatAssistant:
                     "context":context_messages,
                     "query": query
                 })
+                
                 self.chat_history_manager.add_user_message(query)
                 self.chat_history_manager.add_ai_message(response.to_json_string())
                 self.chat_history_manager.save_history()
