@@ -5,6 +5,9 @@ from uuid import uuid4
 from langchain_core.documents import Document
 import os
 from scheme import Data,Extract_Text
+from gemini_scheme import Data_Objects
+from ratelimit import limits, sleep_and_retry
+from tenacity import retry, stop_after_attempt, wait_exponential
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from typing import List, Dict, Any
@@ -19,8 +22,12 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.retrievers import SelfQueryRetriever, MultiQueryRetriever, EnsembleRetriever
 from langchain.chains.query_constructor.base import AttributeInfo
 import asyncio
+import time
 
 logger = logging.getLogger(__name__)
+# Define rate limiter (2 requests per minute)
+REQUESTS = 2
+PERIOD = 60  # seconds
 
 class RAGChatAssistant:
     def __init__(self,user_id:str,dirpath:str="./PDF/",remote_llm:bool=False,ollama_model:str='phi3:mini'):
@@ -42,8 +49,8 @@ class RAGChatAssistant:
             try:
                 with open("gemini_key.txt",'r') as f:
                     key = f.read()
-                llm = ChatGoogleGenerativeAI(model='gemini-1.5-flash',max_retries=4,google_api_key=key,disable_streaming=False,convert_system_message_to_human=True)
-                self.llm = llm.with_structured_output(Data)
+                llm = ChatGoogleGenerativeAI(model='gemini-1.5-flash',max_retries=2,google_api_key=key,disable_streaming=False,convert_system_message_to_human=True,temperature=0.5,cache=False)
+                self.llm = llm.with_structured_output(Data_Objects)
                 self.llm2 =llm
                 logger.info("LLM initialized with gemini-1.5-flash")
             except Exception as e:
@@ -56,10 +63,10 @@ class RAGChatAssistant:
             self.llm = ChatOllama(model=ollama_model,device=self.device,temperature = 0.5,request_timeout=360.0,format='json')
             self.llm2 =ChatOllama(model=ollama_model,device=self.device,temperature = 0.5,request_timeout=360.0)
             logger.info(f"LLM initialized with {ollama_model}")
-        # Pydantic output parser
-        self.output_parser = PydanticOutputParser(pydantic_object=Data)
+            # Pydantic output parser
+            self.output_parser = PydanticOutputParser(pydantic_object=Data)
         # Structured LLM
-        self.structured_llm = self.llm.with_structured_output(schema=Data)
+        # self.structured_llm = self.llm.with_structured_output(schema=Data)
         # Loading vectore store
         if os.path.exists("./chroma_db"):
             print("\n Skipping creating indexes as local index is present \n")
@@ -272,26 +279,44 @@ class RAGChatAssistant:
                 HumanMessage(content=example["input"]),
                 AIMessage(content=str(example["output"]))
             ])
-        prompt_template = ChatPromptTemplate.from_messages(
-            [
-                SystemMessage(content=(
-                    "You are a specialized AI algorithm for scientific data extraction, designed to analyze research papers. "
-                    "Your role is to extract only the relevant information from the provided text. "
-                    "If an attribute's value cannot be determined from the context, return 'null' for that attribute. "
-                    "Rely solely on the given context to extract information and generate responses. "
-                    "Do not use example content to influence the response's content."
-                )),
-                # Please see the how-to about improving performance with
-                # reference examples.
-                ("history:"),
-                MessagesPlaceholder(variable_name='history',n_messages=2),
-                ("examples"),
-                MessagesPlaceholder(variable_name='examples',n_messages=1),
-                ("human", "Query: {query}"),
-                ("context:"),
-                MessagesPlaceholder(variable_name='context'),
-            ]
-        ).partial(format_instructions=self.output_parser.get_format_instructions())
+        if not self.remote_llm:
+            prompt_template = ChatPromptTemplate.from_messages(
+                [
+                    SystemMessage(content=(
+                        "You are a specialized AI algorithm for scientific data extraction, designed to analyze research papers. "
+                        "Your role is to extract only the relevant information from the provided text. "
+                        "If an attribute's value cannot be determined from the context, return 'null' for that attribute. "
+                        "Rely solely on the given context to extract information and generate responses. "
+                        "Do not use example content to influence the response's content."
+                    )),
+                    # Please see the how-to about improving performance with
+                    # reference examples.
+                    ("history:"),
+                    MessagesPlaceholder(variable_name='history',n_messages=2),
+                    ("examples"),
+                    MessagesPlaceholder(variable_name='examples',n_messages=1),
+                    ("human", "Query: {query}"),
+                    ("context:"),
+                    MessagesPlaceholder(variable_name='context'),
+                ]
+            ).partial(format_instructions=self.output_parser.get_format_instructions())
+        else:
+            prompt_template = ChatPromptTemplate.from_messages(
+                [
+                    SystemMessage(content=(
+                        "You are a specialized AI algorithm for scientific data extraction, designed to analyze research papers. "
+                        "Your role is to extract only the relevant information from the provided text. "
+                        "If an attribute's value cannot be determined from the context, return 'null' for that attribute. "
+                        "Rely solely on the given context to extract information and generate responses. "
+                        "Do not use example content to influence the response's content."
+                    )),
+                    # Please see the how-to about improving performance with
+                    # reference examples.
+                    ("human","History:{history}"),
+                    ("human", "Query: {query}"),
+                    ("human","context:{context} "),
+                ]
+            )
         return prompt_template,example_messages
 
     def load_vectors(self,Textprocess: ProcessText):
@@ -299,7 +324,8 @@ class RAGChatAssistant:
         logger.info("Loading vectors from Chroma index.")
         return vectore_store
     
-    def retrieve_context(self, query:str, top_k=5,simalirity=False):
+
+    def retrieve_context(self, query:str, top_k=5):
         """Retrieve relevant documents from vector store"""
         logger.info("Retrieving context")
         # 🧠 **Self-Query Retriever (Filtering)**
@@ -330,30 +356,44 @@ class RAGChatAssistant:
                 type="string",
             ),
         ]
+        @sleep_and_retry
+        @limits(calls=REQUESTS, period=PERIOD)
+        @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=2, min=1, max=30))
+        def _invoke_llm(ensemble_retriever, query: str):
+            """Helper to invoke LLM with rate limiting and retry logic."""
+            return ensemble_retriever.invoke(query)
         doc =[]
-        for pdf in self.pdf_files:
-            query_retriever = SelfQueryRetriever.from_llm(
-                    llm=self.llm2,
-                    vectorstore=self.vectore_store,
-                    document_contents="Extracted text from a chemistry research papers",
-                    metadata_field_info=metadata_field_info,
-                    search_kwargs={"k": top_k, "filter": {"source": pdf}}
+        print("\nLoading context from\n")
+        for pdf in tqdm(self.pdf_files[:2]):
+            try:
+                query_retriever = SelfQueryRetriever.from_llm(
+                        llm=self.llm2,
+                        vectorstore=self.vectore_store,
+                        document_contents="Extracted text from a chemistry research papers",
+                        metadata_field_info=metadata_field_info,
+                        search_kwargs={"k": top_k, "filter": {"source": pdf}}
+                    )
+                # 🔍 **Multi-Query Retriever (Diverse Queries)**
+                multi_query_retriever = MultiQueryRetriever.from_llm(
+                    retriever=query_retriever,
+                    llm=self.llm2
                 )
-            # 🔍 **Multi-Query Retriever (Diverse Queries)**
-            multi_query_retriever = MultiQueryRetriever.from_llm(
-                retriever=query_retriever,
-                llm=self.llm2
-            )
-            # 🎯 **Ensemble Retriever (Combining Both)**
-            ensemble_retriever = EnsembleRetriever(
-                retrievers=[query_retriever, multi_query_retriever],
-                weights=[0.5, 0.5]
-            )
-            # Retrieve documents
-            documents = asyncio.run(ensemble_retriever.ainvoke(query))
-            # print(f"Total documents retrieved from 1.pdf: {len(documents)}\n")
-            # print(documents)
-            doc.append(documents)
+                # 🎯 **Ensemble Retriever (Combining Both)**
+                ensemble_retriever = EnsembleRetriever(
+                    retrievers=[query_retriever, multi_query_retriever],
+                    weights=[0.5, 0.5]
+                )
+                # Retrieve documents
+                documents = _invoke_llm(ensemble_retriever,query)
+                # print(f"Total documents retrieved from 1.pdf: {len(documents)}\n")
+                # print(documents)
+                doc.append(documents)
+            except Exception as e:
+                if "429" in str(e) or "ResourceExhausted" in str(e):
+                    logger.warning("Rate limit exceeded. Retrying with exponential backoff...")
+                    raise e  # Let tenacity handle retries
+                else:
+                    logger.error(f"Error retrieving context for file {pdf}: {str(e)}")
         return doc
     
     def clear_chat_history(self):
@@ -387,14 +427,16 @@ class RAGChatAssistant:
             logger.warning("No matching example found; returning default example.")
             return examples[0:2]
     
+    @sleep_and_retry
+    @limits(calls=REQUESTS, period=PERIOD)
     def generate_response(self, query:str):
         logger.info(f"Generating response")
         """Generate response with RAG and chat history"""
         # Retrieve context
-        context_docs = self.retrieve_context(query,simalirity=True)
+        context_docs = self.retrieve_context(query)
         context_docs = context_docs[0]
         context_messages = [
-                HumanMessage(content=doc.page_content)
+                HumanMessage(content=doc.page_content +"\n" +str(doc.metadata) + " source of this context is:" + str(doc.metadata['source']))
                 for doc in context_docs
         ]
 
@@ -406,26 +448,39 @@ class RAGChatAssistant:
         try:
             # Prepare chain
             chain = prompt_template | self.llm
-            response = chain.invoke({
-                "history": self.chat_history_manager.get_message_history(limit=2),
-                "examples": best_example,
-                "context":context_messages,
-                "query": query
-            })
-            # parse the JSON response
-            raw_response = json.loads(response.content)
-            data= Data(data=[Extract_Text(**raw_response)])
-            # parse the output by schema
-            parser_output=self.output_parser.invoke(data.to_json_string())
-            # Add messages to chat history
-            self.chat_history_manager.add_user_message(query)
-            self.chat_history_manager.add_ai_message(response.content)
-            self.chat_history_manager.save_history()
-            return {
-                "response": response.content,
-                "context_docs": context_docs,
-                "validated_output":parser_output
-            }
+            if self.remote_llm:
+                response = chain.invoke({
+                    "history": self.chat_history_manager.get_message_history(limit=2),
+                    "context":context_messages,
+                    "query": query
+                })
+                self.chat_history_manager.add_user_message(query)
+                self.chat_history_manager.add_ai_message(response.to_json_string())
+                self.chat_history_manager.save_history()
+                # Wait before next request to enforce rate limit
+                time.sleep(PERIOD / REQUESTS)
+                return response.to_json_string()
+            else:
+                response = chain.invoke({
+                    "history": self.chat_history_manager.get_message_history(limit=2),
+                    "examples": best_example,
+                    "context":context_messages,
+                    "query": query
+                })
+                # parse the JSON response
+                raw_response = json.loads(response.content)
+                data= Data(data=[Extract_Text(**raw_response)])
+                # parse the output by schema
+                parser_output=self.output_parser.invoke(data.to_json_string())
+                # Add messages to chat history
+                self.chat_history_manager.add_user_message(query)
+                self.chat_history_manager.add_ai_message(response.content)
+                self.chat_history_manager.save_history()
+                return {
+                    "response": response.content,
+                    "context_docs": context_docs,
+                    "validated_output":parser_output
+                }
         except Exception as e:
             print(f"Error generating response: {e}")
             logger.error("Exception occurred: %s", str(e))
