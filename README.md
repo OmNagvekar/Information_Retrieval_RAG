@@ -1,6 +1,6 @@
 # Information Retrieval RAG For Data Extraction from Research Papers
 
-This project is a **Retrieval-Augmented Generation (RAG)** system designed to extract scientific and technical information from research papers. The system is built to handle large-scale document processing, embedding-based retrieval, and context-aware responses, leveraging **LangChain**, **FAISS**, and **LLMs** for robust data extraction and conversational AI.
+This project is a **Retrieval-Augmented Generation (RAG)** system designed to extract scientific and technical information from research papers. The system is built to handle large-scale document processing, embedding-based retrieval, and context-aware responses, leveraging **LangChain**, **ChromaDB**, and **LLMs** for robust data extraction and conversational AI.The system supports **Gemini API** and **Ollama** for LLM.
 
 ---
 
@@ -15,6 +15,8 @@ omnagvekar-information_retrieval_rag/
 ├── scheme.py              # ontains Pydantic models for data validation and Defines data schemas for extracted information
 ├── textsplitter.py        # Processes and embeds text chunks for vector storage
 ├── ChatHistory.py         # Contains code to manage history
+├── gemini_scheme.py       # New schema for Gemini API integration
+├── gemini_key.txt         # Stores API key for Gemini LLM (Looking for API KEY Not available in Repo as it is API KEY 😊)
 ├── LICENSE                # Added LICENSE File
 ```
 
@@ -34,14 +36,15 @@ omnagvekar-information_retrieval_rag/
    - **Embedding**: Utilizes HuggingFace's `BAAI/bge-base-en` model for generating dense embeddings compatible with FAISS.
 
 ### 3. **Vector Storage and Retrieval**
-   - **Storage**: Implements FAISS for fast similarity searches on vectorized document chunks.
+   - **Storage**: Implements ChromaDB for fast similarity searches on vectorized document chunks.
    - **Search Modes**: Supports Maximum Marginal Relevance (MMR) and similarity-based retrieval.
-   - **Local Storage**: Saves and loads FAISS indices for persistent retrieval capabilities.
+   - **Local Storage**: Local Storage: Saves and loads ChromaDB indices for persistent retrieval capabilities..
 
 ### 4. **RAG Pipeline**
-   - **LLM Integration**: Leverages LangChain's `ChatOllama` for structured query responses.
-   - **Prompt Engineering**: Constructs custom prompts with examples, ensuring high accuracy in responses.
+   - **LLM Integration**: Leverages LangChain's `ChatOllama` and also supports `Gemini API LLM ` for structured query responses.
+   - **Prompt Engineering**: Constructs custom prompts with examples, ensuring high accuracy in responses for `ChatOllama` Instance LLM.
    - **Schema Validation**: Ensures extracted data adheres to well-defined Pydantic models, reducing inconsistencies.
+   - **Context Retrieval**: Implements Self-Query Retriever, Multi-Query Retriever, and Ensemble Retriever for more accurate document retrieval.
 
 ### 5. **Chat History Management**
    - **Context-Aware Conversations**: Maintains chat history for relevant and coherent multi-turn dialogues.
@@ -122,27 +125,57 @@ Interact with the system using natural language queries. Examples include:
 The RAG system provides responses in a structured JSON format (Sample output. Output will not be always be in this format):
 
 ```json
-{
-  "input_data": {
-    "switching_layer_material": "CuO",
-    "synthesis_method": "Chemical",
-    "top_electrode": "Pt",
-    "bottom_electrode": "Au",
-    "switching_layer_thickness": 5000
+  [{
+    "input_data": {
+      "switching_layer_material": "CuO",
+      "synthesis_method": "Chemical",
+      "top_electrode": "Pt",
+      "bottom_electrode": "Au",
+      "switching_layer_thickness": 5000
+    },
+    "output_data": {
+      "type_of_switching": "Resistive",
+      "endurance_cycles": 50000,
+      "retention_time": 10000,
+      "memory_window": 1.2
+    },
+    "reference_information": {
+      "name_of_paper": "Switching Properties of CuO Nanoparticles",
+      "doi": "https://doi.org/10.1234/exampledoi",
+      "year": 2022,
+      "source": "paper.pdf"
+    }
   },
-  "output_data": {
-    "type_of_switching": "Resistive",
-    "endurance_cycles": 50000,
-    "retention_time": 10000,
-    "memory_window": 1.2
-  },
-  "reference_information": {
-    "name_of_paper": "Switching Properties of CuO Nanoparticles",
-    "doi": "https://doi.org/10.1234/exampledoi",
-    "year": 2022,
-    "source": "paper.pdf"
+
+  {
+      "data": [
+          {
+              "numeric_value": null,
+              "switching_layer_material": "CuO",
+              "synthesis_method": "null",
+              "top_electrode": "Ag",
+              "top_electrode_thickness": null,
+              "bottom_electrode": null,
+              "bottom_electrode_thickness": null,
+              "switching_layer_thickness": null,
+              "switching_type": null,
+              "endurance_cycles": null,
+              "retention_time": null,
+              "memory_window": null,
+              "num_states": null,
+              "conduction_mechanism": null,
+              "resistive_switching_mechanism": null,
+              "paper_name": null,
+              "doi": null,
+              "year": 2020,
+              "source": null,
+              "additionalProperties": null
+          }
+      ]
   }
-}
+]
+
+
 ```
 
 ---
@@ -152,8 +185,8 @@ The RAG system provides responses in a structured JSON format (Sample output. Ou
 ### **`rag_assistant.py (Core RAG System)`**
 - **`RAGChatAssistant`**: Handles document retrieval and response generation.
 - **`Methods:`**:
-    - `create_vectors()`: Processes PDFs, extracts text, generates embeddings, and stores them in FAISS.
-    - `retrieve_context()`: Retrieves relevant text chunks based on query similarity.
+    - `create_vectors()`: Processes PDFs, extracts text, generates embeddings, and stores them in ChromaDB.
+    - `retrieve_context()`: Implements Self-Query Retriever, Multi-Query Retriever, and Ensemble Retriever for accurate document retrieval.
     - `generate_response()`: Uses ChatOllama to produce structured, schema-validated responses.
     - `create_prompt_template()`: Generates contextual prompts for better response accuracy.
 
@@ -163,11 +196,14 @@ The RAG system provides responses in a structured JSON format (Sample output. Ou
   - `unstructured_loader`: Advanced OCR-based loader.
   - `docling_loader`: Extracts structured metadata.
 
+### **`gemini_scheme.py`**
+- Defines response structure and ensures schema validation for Gemini API responses.
+
 ### **`textsplitter.py`**
 - **`ProcessText`**: Manages text splitting, embedding, and vector store creation.
   - `splitter`: Splits documents into chunks.
   - `embeded_documents`: Converts chunks into embeddings.
-  - `vectore_store`: Creates FAISS-based vector storage.
+  - `vectore_store`: Creates ChromaDB vector storage.
 
 ### **`scheme.py`**
 - Defines schemas for structured data extraction.
@@ -215,13 +251,7 @@ The RAG system provides responses in a structured JSON format (Sample output. Ou
 - Implement dynamic schema generation for custom queries.
 - Integrate advanced summarization and sentiment analysis for chat histories.
 - Add visualization tools for insights like topic distributions.
-
----
-
-## Logging & Debugging
-
-- Logs are stored in the Logs/ directory.
-- Automatic cleanup deletes logs older than 1 day if no errors are found.
+- Develop Full Stack Application with Frontend for user intreaction on the web.
 
 ---
 
