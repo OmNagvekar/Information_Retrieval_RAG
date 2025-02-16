@@ -325,7 +325,7 @@ class RAGChatAssistant:
         return vectore_store
     
 
-    def retrieve_context(self, query:str, top_k=5):
+    def retrieve_context(self, query:str, top_k=7):
         """Retrieve relevant documents from vector store"""
         logger.info("Retrieving context")
         # 🧠 **Self-Query Retriever (Filtering)**
@@ -367,12 +367,12 @@ class RAGChatAssistant:
         for pdf in tqdm(self.pdf_files):
             try:
                 query_retriever = SelfQueryRetriever.from_llm(
-                        llm=self.llm2,
-                        vectorstore=self.vectore_store,
-                        document_contents="Extracted text from a chemistry research papers",
-                        metadata_field_info=metadata_field_info,
-                        search_kwargs={"k": top_k, "filter": {"source": pdf}}
-                    )
+                    llm=self.llm2,
+                    vectorstore=self.vectore_store,
+                    document_contents="Extracted text from a comprehensive chemistry research paper covering the abstract, experimental methods, results, discussion, and supplementary data.",
+                    metadata_field_info=metadata_field_info,
+                    search_kwargs={"k": top_k, "filter": {"source": pdf}}
+                )
                 # 🔍 **Multi-Query Retriever (Diverse Queries)**
                 multi_query_retriever = MultiQueryRetriever.from_llm(
                     retriever=query_retriever,
@@ -448,19 +448,29 @@ class RAGChatAssistant:
         try:
             # Prepare chain
             chain = prompt_template | self.llm
+            non_structured_chain = prompt_template | self.llm2
             if self.remote_llm:
-                response = chain.invoke({
+                structured_response = chain.invoke({
+                    "history": self.chat_history_manager.get_message_history(limit=2),
+                    "context":context_messages,
+                    "query": query
+                })
+                non_Structured_response = non_structured_chain.invoke({
                     "history": self.chat_history_manager.get_message_history(limit=2),
                     "context":context_messages,
                     "query": query
                 })
                 
+                structured_response = structured_response.to_json_string()
                 self.chat_history_manager.add_user_message(query)
-                self.chat_history_manager.add_ai_message(response.to_json_string())
+                self.chat_history_manager.add_ai_message(structured_response)
                 self.chat_history_manager.save_history()
                 # Wait before next request to enforce rate limit
                 time.sleep(PERIOD / REQUESTS)
-                return response.to_json_string()
+                return {
+                    "structured_response":structured_response
+                    "non_Structured_response":non_Structured_response.content
+                }
             else:
                 response = chain.invoke({
                     "history": self.chat_history_manager.get_message_history(limit=2),
