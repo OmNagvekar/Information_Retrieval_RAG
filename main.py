@@ -94,24 +94,22 @@ if __name__=="__main__":
         Please read the provided PDF thoroughly and extract the following quantities. Your output must be a table with two columns: "Quantity" and "Extracted Value". For each of the items listed below, provide the extracted value exactly as it appears in the document. If an item is not found, simply enter "N/A" for that field. Ensure that any numerical values include their associated units (if applicable) and that you handle multiple values consistently.
 
         Extract the following items:
-        - Switching layer material
-        - Synthesis method
-        - Top electrode
-        - Thickness of top electrode in nanometers
-        - Bottom electrode
-        - Thickness of bottom electrode in nanometers
-        - Thickness of switching layer in nanometers
-        - Type of switching
-        - Endurance
-        - Retention time in seconds
-        - Memory window in volts
-        - Number of states
-        - Conduction mechanism type
-        - Resistive switching mechanism
-        - Paper name
-        - DOI
-        - Publication year
-        - Source (pdf file name)
+        - switching layer material
+        - synthesis method
+        - top electrode
+        - thickness of top electrode in nanometers
+        - bottom electrode
+        - thickness of bottom electrode in nanometers
+        - thickness of switching layer in nanometers
+        - type of switching
+        - endurance
+        - retention time in seconds
+        - memory window in volts
+        - number of states
+        - conduction mechanism type
+        - resistive switching mechanism
+        - paper name
+        - source (pdf file name)
 
         Instructions:
         1. Analyze the entire PDF document to locate all references to the above items.
@@ -121,7 +119,6 @@ if __name__=="__main__":
         5. Do not include any extra text, headings, or commentary—only the table is required.
         6. If an item cannot be found, record it as "N/A" in the "Extracted Value" column.
 
-        Please provide your final answer as the completed table.
         """
     )
     # print("\nAssistant:", result['response'])

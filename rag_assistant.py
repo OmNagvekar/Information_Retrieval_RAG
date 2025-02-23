@@ -5,7 +5,8 @@ from uuid import uuid4
 from langchain_core.documents import Document
 import os
 from scheme import Data,Extract_Text
-from gemini_scheme import Data_Objects
+from citation import Citations
+from gemini_scheme import Data_Objects, Extract_Data
 from ratelimit import limits, sleep_and_retry
 from tenacity import retry, stop_after_attempt, wait_exponential
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -23,6 +24,11 @@ from langchain.retrievers import SelfQueryRetriever, MultiQueryRetriever, Ensemb
 from langchain.chains.query_constructor.base import AttributeInfo
 import asyncio
 import time
+import re
+from typing import Optional
+from kor.extraction import create_extraction_chain
+from kor import from_pydantic
+
 
 logger = logging.getLogger(__name__)
 # Define rate limiter (2 requests per minute)
@@ -39,10 +45,6 @@ class RAGChatAssistant:
         logger.info(f"Using device: {self.device}")
         # chat History manager
         self.chat_history_manager = ChatHistoryManager(user_id=user_id)
-        # Intializing objects
-        self.Textprocess = ProcessText(device=self.device)
-        self.document_loader = DocLoader(self.dirpath,filter_text=True)
-        self.pdf_files =[os.path.basename(pdfs) for pdfs in self.document_loader.file_path]
         #LLM
         self.remote_llm =remote_llm
         if remote_llm:
@@ -51,13 +53,18 @@ class RAGChatAssistant:
                     key = f.read()
                 llm = ChatGoogleGenerativeAI(model='gemini-1.5-flash',max_retries=2,google_api_key=key,disable_streaming=False,convert_system_message_to_human=True,temperature=0.5,cache=False)
                 self.llm = llm.with_structured_output(Data_Objects)
-                self.llm2 =llm
+                self.llm_citation = llm #llm.with_structured_output(Citations)
+                self.llm2 = llm
+                # Pydantic output parser
+                self.output_parser = PydanticOutputParser(pydantic_object=Data_Objects)
                 logger.info("LLM initialized with gemini-1.5-flash")
             except Exception as e:
                 logger.error("Failed to intialize the Gemini LLM gemini-1.5-flash %s",str(e))
                 self.llm = ChatOllama(model=ollama_model,device=self.device,temperature = 0.5,request_timeout=360.0,format='json')
                 self.llm2 =ChatOllama(model=ollama_model,device=self.device,temperature = 0.5,request_timeout=360.0)
                 logger.info(f"LLM initialized with {ollama_model}")
+                # Pydantic output parser
+                self.output_parser = PydanticOutputParser(pydantic_object=Data)
                 self.remote_llm=False
         else:
             self.llm = ChatOllama(model=ollama_model,device=self.device,temperature = 0.5,request_timeout=360.0,format='json')
@@ -71,10 +78,20 @@ class RAGChatAssistant:
         if os.path.exists("./chroma_db"):
             print("\n Skipping creating indexes as local index is present \n")
             logger.info("Local Chroma index found. Loading existing vectors.")
+            # Intializing objects
+            self.Textprocess = ProcessText(device=self.device)
+            self.document_loader = DocLoader(self.dirpath,filter_text=True)
+            self.pdf_files =[os.path.basename(pdfs) for pdfs in self.document_loader.file_path]
+            # Loading vectore store
             self.vectore_store = self.load_vectors(self.Textprocess)
         else:
             print("\n Creating Vectore Index and Storing Locally \n")
             logger.info("No existing Chroma index found. Creating new vector index.")
+            # Intializing objects
+            self.Textprocess = ProcessText(device=self.device)
+            self.document_loader = DocLoader(self.dirpath,filter_text=True)
+            self.pdf_files =[os.path.basename(pdfs) for pdfs in self.document_loader.file_path]
+            # Creating Vectore Store
             self.vectore_store = self.create_vectors(self.document_loader,self.Textprocess)
 
     def create_vectors(self,document_loader: DocLoader,Textprocess: ProcessText):
@@ -84,13 +101,12 @@ class RAGChatAssistant:
         
         for doc in tqdm(document):
             processed_text =  Textprocess.splitter(doc.page_content)
-            page_metadata = doc.metadata
-            page_metadata.update({"id": str(uuid4())})
+            page_metadata = doc.metadata.copy()
             doc_objects = [
                 Document(
                     page_content=chunk,
                     metadata={
-                        "id":page_metadata.get("id"),
+                        "id":str(uuid4()),
                         "source":page_metadata.get("source", "unknown"),
                         "title":page_metadata.get("title", "unknown"),
                         "total_pages":page_metadata.get('total_pages',"unknown"),
@@ -296,7 +312,7 @@ class RAGChatAssistant:
                     ("examples"),
                     MessagesPlaceholder(variable_name='examples',n_messages=1),
                     ("human", "Query: {query}"),
-                    ("context:"),
+                    ("system","context:"),
                     MessagesPlaceholder(variable_name='context'),
                 ]
             ).partial(format_instructions=self.output_parser.get_format_instructions())
@@ -316,7 +332,7 @@ class RAGChatAssistant:
                     ("human", "Query: {query}"),
                     ("human","context:{context} "),
                 ]
-            )
+            ).partial(format_instructions=self.output_parser.get_format_instructions())
         return prompt_template,example_messages
 
     def load_vectors(self,Textprocess: ProcessText):
@@ -324,7 +340,90 @@ class RAGChatAssistant:
         logger.info("Loading vectors from Chroma index.")
         return vectore_store
     
+    def preprocess_text(self,text:str) ->dict:
+        def markdown_table_to_dict(table_str: str) -> dict:
+            """
+            Converts a markdown table to a dictionary.
+            Assumes the first column contains keys and the second column the values.
+            """
+            # Split the input string into lines
+            lines = table_str.strip().split("\n")
+            # Ignore header and divider lines
+            data_lines = lines[2:]
+            result = {}
+            for line in data_lines:
+                # Split by the pipe character and strip extra spaces
+                parts = [p.strip() for p in line.split("|") if p.strip()]
+                if len(parts) >= 2:
+                    key = parts[0]
+                    value = parts[1]
+                    result[key] = value
+            return result
 
+        def map_and_clean_data(raw_data: dict) -> dict:
+            """
+            Map raw keys from the markdown table to the Pydantic model field names,
+            while cleaning up values. This function ignores the case of the keys.
+            """
+            from typing import Optional
+            import re
+            # Normalize raw data keys to lowercase
+            normalized_data = { key.lower(): value for key, value in raw_data.items() }
+            
+            # Mapping keys are provided in lowercase
+            mapping = {
+                "switching layer material": "switching_layer_material",
+                "synthesis method": "synthesis_method",
+                "top electrode": "top_electrode",
+                "thickness of top electrode in nanometers": "top_electrode_thickness",
+                "bottom electrode": "bottom_electrode",
+                "thickness of bottom electrode in nanometers": "bottom_electrode_thickness",
+                "thickness of switching layer in nanometers": "switching_layer_thickness",
+                "type of switching": "switching_type",
+                "endurance": "endurance_cycles",
+                "retention time in seconds": "retention_time",
+                "memory window in volts": "memory_window",
+                "number of states": "num_states",
+                "conduction mechanism type": "conduction_mechanism",
+                "resistive switching mechanism": "resistive_switching_mechanism",
+                "paper name": "paper_name",
+                "source (pdf file name)": "source"
+            }
+            
+            def clean_numeric_value(value: str) -> Optional[str]:
+                """Removes non-numeric characters (except for a decimal point) from a value."""
+                if value.strip().lower() in ["n/a", "null"]:
+                    return None
+                match = re.search(r"([\d.]+)", value)
+                return match.group(1) if match else value
+
+            def convert_na(value: str) -> Optional[str]:
+                """Convert 'N/A' or 'null' to None and return the trimmed value otherwise."""
+                return None if value.strip().lower() in ["n/a", "null"] else value.strip()
+            
+            cleaned = {}
+            for raw_key, field_name in mapping.items():
+                # Look up the raw key (already normalized) in the normalized data
+                raw_value = normalized_data.get(raw_key, "").strip()
+                cleaned_value = convert_na(raw_value)
+                
+                if field_name in ["endurance_cycles", "retention_time"]:
+                    cleaned_value = clean_numeric_value(raw_value)
+                    try:
+                        cleaned_value = int(float(cleaned_value)) if cleaned_value is not None else None
+                    except ValueError:
+                        pass
+                elif field_name in ["top_electrode_thickness", "bottom_electrode_thickness", "switching_layer_thickness", "memory_window"]:
+                    cleaned_value = clean_numeric_value(raw_value)
+                    try:
+                        cleaned_value = float(cleaned_value) if cleaned_value is not None else None
+                    except ValueError:
+                        pass
+                
+                cleaned[field_name] = cleaned_value
+            return cleaned
+        return map_and_clean_data(markdown_table_to_dict(text))
+    
     def retrieve_context(self, query:str, top_k=7):
         """Retrieve relevant documents from vector store"""
         logger.info("Retrieving context")
@@ -364,7 +463,7 @@ class RAGChatAssistant:
             return ensemble_retriever.invoke(query)
         doc =[]
         print("\nLoading context from\n")
-        for pdf in tqdm(self.pdf_files):
+        for pdf in tqdm(self.pdf_files[:2]):
             try:
                 query_retriever = SelfQueryRetriever.from_llm(
                     llm=self.llm2,
@@ -427,6 +526,160 @@ class RAGChatAssistant:
             logger.warning("No matching example found; returning default example.")
             return examples[0:2]
     
+    def extract_citations(self, context: list[SystemMessage]) -> str:
+        """
+        Extract citations from the provided context messages using Kor.
+        
+        This function concatenates the content of the context messages into a single text block
+        and uses Kor to extract citation details. For each citation, the extraction schema expects:
+        - Source_ID: an integer (from "Source ID:")
+        - Article_ID: a unique identifier for the citation (UUID format)
+        - Article_Snippet: a short excerpt from the "Article Snippet:" field
+        - Article_Title: the text following "Article Title:"
+        - Article_Source: the text following "Article Source:"
+        
+        The output is a JSON object with a key "citations" mapping to a list of citation objects.
+        """
+        def parse_citations(kor_response: dict) -> dict:
+            """
+            Parse the Kor output response into a dictionary without remapping keys.
+            
+            The function attempts multiple strategies to extract a valid JSON:
+            1. Extract a JSON block wrapped in triple backticks (```json ... ```).
+            2. Remove <json> and </json> tags if present.
+            3. Use the raw text as-is.
+            4. Convert the "data" field to a JSON string.
+            
+            If parsing fails due to extra trailing characters, the function trims the candidate
+            at the last '}' and retries. It iterates over these candidate strings until it finds
+            a valid parsed response with non-empty citation data, or raises an error.
+            """
+            
+            def try_parse(candidate: str) -> dict:
+                logger.debug("Attempting to parse candidate JSON: %s", candidate[:100])
+                try:
+                    logger.debug("Candidate parsed successfully.")
+                    return json.loads(candidate)
+                except json.JSONDecodeError as e:
+                    # If there's extra trailing data, trim candidate to last '}'
+                    logger.warning("JSONDecodeError encountered: %s", e)
+                    pos = candidate.rfind("}")
+                    if pos != -1:
+                        try:
+                            trimmed = candidate[:pos+1]
+                            logger.debug("Attempting to parse trimmed candidate: %s", trimmed[:100])
+                            return json.loads(trimmed)
+                        except Exception :
+                            pass
+                    raise e
+
+            candidates = []
+            raw_text = kor_response.get("raw", "").strip()
+            logger.info("Raw text from Kor response: %s", raw_text[:100])
+            # Candidate 1: Extract JSON block wrapped in triple backticks.
+            match = re.search(r"```json\s*(\{.*?\})\s*```", raw_text, re.DOTALL)
+            if match:
+                candidates.append(match.group(1))
+                logger.info("Candidate 1 extracted from triple backticks:")
+            # Candidate 2: If raw_text starts with <json>, extract up to the first occurrence of </json>
+            if raw_text.startswith("<json>"):
+                # Split on </json> and take the first part after <json>
+                temp = raw_text[len("<json>"):].split("</json>")[0].strip()
+                candidates.append(temp)
+                logger.info("Candidate 2 extracted by stripping <json> tags: %s", temp[:100])
+            
+            # Candidate 3: Use the raw text itself.
+            if raw_text:
+                candidates.append(raw_text)
+                logger.info("Candidate 3 using raw text itself.")
+            # Candidate 4: If "data" exists in the response, try to use its JSON representation.
+            data_part = kor_response.get("data")
+            if data_part:
+                try:
+                    candidates.append(json.dumps(data_part))
+                    temp12=json.dumps(data_part)
+                    logger.info("Candidate 4 from data field:")
+                except Exception:
+                    pass
+
+            parsed = None
+            for candidate in candidates:
+                try:
+                    candidate_obj = try_parse(candidate)
+                    # Check if candidate_obj contains a citations list
+                    if isinstance(candidate_obj, dict):
+                        # Handle nested structure: {"citations": {"citations": [...]}}
+                        if "citations" in candidate_obj:
+                            inner = candidate_obj["citations"]
+                            if isinstance(inner, dict) and "citations" in inner and inner["citations"]:
+                                parsed = {"citations": inner["citations"]}
+                                break
+                            elif isinstance(inner, list) and inner:
+                                parsed = candidate_obj
+                                break
+                        else:
+                            # If no "citations" key exists but candidate_obj is non-empty, accept it.
+                            if candidate_obj:
+                                parsed = candidate_obj
+                                break
+                except Exception as e:
+                    continue
+
+            if parsed is None or not parsed:
+                logger.error("All candidates failed to produce valid citation data.")
+                raise ValueError("Failed to parse a valid JSON with citation data from the Kor response.")
+            logger.info("Successfully parsed citation data.")
+            return parsed
+        
+        
+        logger.info("Citation chain executing")
+        try:
+            # Concatenate the context messages into a single string.
+            context_text = "\n\n".join(msg.content for msg in context)
+
+            # Convert the Citations Pydantic model into a Kor schema.
+            schema, validator = from_pydantic(
+                Citations,
+                description="Extract citation details from the given context. Each citation should include Source_ID, Article_ID, Article_Snippet, Article_Title, and Article_Source.",
+                examples=[
+                    (
+                        "Source ID: 0\nArticle ID: 5a88139a-d5bf-4a83-96ed-2ad5f57b978d\nArticle Title: Memristive Devices from CuO Nanoparticles\nArticle Snippet: The device exhibits robust switching with a ratio of 103, supporting stable memory.\nArticle Source: 1.pdf\nmetadata: {...}",
+                        {
+                            "citations": [
+                                {
+                                    "Source_ID": 0,
+                                    "Article_ID": "5a88139a-d5bf-4a83-96ed-2ad5f57b978d",
+                                    "Article_Snippet": "The device exhibits robust switching with a ratio of 103",
+                                    "Article_Title": "Memristive Devices from CuO Nanoparticles",
+                                    "Article_Source": "1.pdf"
+                                }
+                            ]
+                        }
+                    )
+                ],
+                many=False
+            )
+            
+            # Create an extraction chain using Kor.
+            # Use the LLM configured for citations (self.llm_citation).
+            chain = create_extraction_chain(
+                self.llm_citation,
+                schema,
+                encoder_or_encoder_class="json",
+                validator=validator
+            )
+            
+            # Invoke the chain with the concatenated context text.
+            result = chain.invoke(context_text)
+            logger.info("Citation chain execution complete")
+            # Return the extracted citations as a JSON string.
+            return json.dumps(parse_citations(result), indent=4, ensure_ascii=False)
+        
+        except Exception as e:
+            logger.error("Exception in Kor citation extraction: %s", str(e))
+            return "{}"
+
+
     @sleep_and_retry
     @limits(calls=REQUESTS, period=PERIOD)
     def generate_response(self, query:str):
@@ -436,40 +689,49 @@ class RAGChatAssistant:
         context_docs = self.retrieve_context(query)
         context_docs = context_docs[0]
         context_messages = [
-                HumanMessage(content=doc.page_content +"\n" +str(doc.metadata) + " source of this context is:" + str(doc.metadata['source']))
-                for doc in context_docs
+                SystemMessage(content=f"Source ID: {i}\nArticle ID: {doc.metadata['id']}\nArticle Title: {doc.metadata['title']}\nArticle Snippet: {doc.page_content}\nArticle Source: {doc.metadata['source']}\nmetadata: {doc.metadata}\n")
+                for i,doc in enumerate(context_docs)
         ]
 
         # Create prompt template
         prompt_template, example_messages = self.create_prompt_template()
         best_example = self.retrieve_best_example(query,example_messages)
         
-        
         try:
             # Prepare chain
-            chain = prompt_template | self.llm
             non_structured_chain = prompt_template | self.llm2
             if self.remote_llm:
-                structured_response = chain.invoke({
+                non_structured_response = non_structured_chain.invoke({
                     "history": self.chat_history_manager.get_message_history(limit=2),
                     "context":context_messages,
                     "query": query
                 })
-                non_Structured_response = non_structured_chain.invoke({
-                    "history": self.chat_history_manager.get_message_history(limit=2),
-                    "context":context_messages,
-                    "query": query
-                })
-                
-                structured_response = structured_response.to_json_string()
+                # Wait before next request to enforce rate limit
+                time.sleep(PERIOD / REQUESTS)
+                try:
+                    structured_response = self.preprocess_text(non_structured_response.content)
+                    structured_response = Data_Objects(data=[Extract_Data(**structured_response)])
+                    structured_response = structured_response.to_json_string()
+                    citations_response = self.extract_citations(context_messages)
+                except Exception as e:
+                    logger.error("Exception occurred in Parsing: %s", str(e))
+                    structured_response = self.llm.invoke(non_structured_response.content)
+                    structured_response = structured_response.to_json_string()
+                    citations_response = self.extract_citations(context_messages)
+                    logger.info("Used Structured LLM on non_structured_response")
+
+                import pathlib
+                pathlib.Path("./filtered_output/context" + ".txt").write_bytes(str(context_messages).encode())
+                pathlib.Path("./filtered_output/sample_response" + ".json").write_bytes(structured_response.encode())
+                pathlib.Path("./filtered_output/citation_response" + ".json").write_bytes(citations_response.encode())
                 self.chat_history_manager.add_user_message(query)
                 self.chat_history_manager.add_ai_message(structured_response)
                 self.chat_history_manager.save_history()
-                # Wait before next request to enforce rate limit
-                time.sleep(PERIOD / REQUESTS)
+
                 return {
-                    "structured_response":structured_response
-                    "non_Structured_response":non_Structured_response.content
+                    "structured_response":structured_response,
+                    "non_Structured_response":non_structured_response.content,
+                    "citations":citations_response
                 }
             else:
                 response = chain.invoke({
@@ -483,7 +745,7 @@ class RAGChatAssistant:
                 data= Data(data=[Extract_Text(**raw_response)])
                 # parse the output by schema
                 parser_output=self.output_parser.invoke(data.to_json_string())
-                # Add messages to chat history
+                # Add messages to chat hisory
                 self.chat_history_manager.add_user_message(query)
                 self.chat_history_manager.add_ai_message(response.content)
                 self.chat_history_manager.save_history()
@@ -500,5 +762,5 @@ class RAGChatAssistant:
                 "context_docs": [],
                 "validated_output":""
             }
-        
+
 

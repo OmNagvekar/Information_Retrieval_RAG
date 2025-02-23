@@ -1,8 +1,8 @@
 from typing import List, Optional, Union, Dict, Any
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import BaseModel, Field, ConfigDict
 import json
 
-class Extract_Text(BaseModel):
+class Extract_Data(BaseModel):
     """
     Contains information about extracted data from research papers.
     """
@@ -83,32 +83,27 @@ class Extract_Text(BaseModel):
             "oxygen vacancy migration, redox reactions, or the formation and rupture of conductive filaments."
         )
     )
-    paper_name: Optional[str] = Field(default=None, description="The title or name of the research paper from which the data is extracted.")
-    doi: Optional[str] = Field(default=None, description="The Digital Object Identifier (DOI) of the research paper, providing a persistent link to its online location.")
-    year: Optional[int] = Field(default=None, description="The publication year of the research paper.")
-    source: Optional[str] =Field(default=None,drescription=(
-            "The filename of the PDF document from which the data was extracted. Examples might include 'Memory_characteristic.pdf' "
-            "or simply '1.pdf'."
-        )
-    )
     additionalProperties: Optional[str]= Field(default=None,description=(
             "Additional information or notes that do not fit into the predefined fields but are relevant to the user's query. "
             "This field is used for capturing any extra details from the research paper."
         )
     )
-    
+    paper_name: Optional[str] = Field(default=None, description="The title or name of the research paper from which the data is extracted.")
+    source: Optional[str] =Field(default=None,drescription=(
+            "The filename of the PDF document from which the data was extracted. Examples might include 'Memory_characteristic.pdf' "
+            "or simply '1.pdf'."
+        )
+    )
     
     model_config = ConfigDict(
         validate_assignment = False,  # Disable validation on assignment
         extra = 'allow' , # Allow extra fields
         arbitrary_types_allowed = True
     )
-    
-    
+
 class Data_Objects(BaseModel):
     
-    data:List[Extract_Text] = Field(default_factory=list,description="A list of extracted data objects.")
-    
+    data:List[Extract_Data] = Field(default_factory=list,description="A list of extracted data objects.")
     model_config = ConfigDict(
         validate_assignment = False,  # Disable validation on assignment
         extra = 'allow' , # Allow extra fields
@@ -123,16 +118,7 @@ class Data_Objects(BaseModel):
     
     
 if __name__=="__main__":
-    # example = {
-    #     "data": [{"input_data": {"device_material": "Silicon Nanowire", "electrode_shape": "Triangular", "bottom_electrodes": ["SiNi", "SiO2"], "top_electrodes": ["Pt"], "thickness_of_top_electrode": 10, "thickness_of_bottom_electrode": [5, 2], "thickness_of_switching_layer": 30}, "output_data": {"type_of_switching": "Resistive", "endurance_cycles": 1000, "retention_time": 86400, "memory_window": 2.5, "number_of_states": "Binary", "conduction_mechanism_type": "Filamentary", "resistive_switching_mechanism": "Oxide Formation"}, "reference_information": {"name_of_paper": "Flexible Resistive Switching Devices with Triangular-Shaped Silicon Nanowire Bottom Electrodes", "doi": "10.2145/SSSE.S080716", "year": 2016}}]
-    # }
-    # try:
-    #     raw = json.dumps(example["data"][0],indent=2)
-    #     b = Extract_Text(**dict(json.loads(raw)))
-    #     l=Data(data=[b])
-    #     print("\n-----------------------------------------------\n",l,"\n---------------------------------------\n")
-    #     print("\n-----------------------------------------------------------------\n",raw,"\n----------------------------------------------------------------------\n")
-    #     print("\n-----------------------------------------------------------------\n",l.to_json_string(),"\n----------------------------------------------------------------------\n")
-    # except Exception as e:
-    #     print(e)
-    print(Data.model_json_schema())
+    temp ={'switching_layer_material': 'CuxO', 'synthesis_method': 'solution-processed', 'top_electrode': 'Au', 'top_electrode_thickness': None, 'bottom_electrode': 'ITO', 'bottom_electrode_thickness': None, 'switching_layer_thickness': None, 'switching_type': None, 'endurance_cycles': 200, 'retention_time': 104, 'memory_window': None, 'num_states': None, 'conduction_mechanism': 'mixed ionic electronic conduction (MIEC)', 'resistive_switching_mechanism': 'formation of Cu filaments', 'paper_name': 'Resistive Switching Characteristics in Solution-Processed Copper Oxide (CuxO) by Stoichiometry Tuning', 'source': '10.pdf'}
+    print(Data_Objects(data=[Extract_Data(**temp)]).to_json_string())
+    print("\n\n-----------------------------")
+    print(Data_Objects.model_json_schema())
