@@ -106,7 +106,12 @@ Place the research papers (PDFs) in a directory (default: `./PDF/`).
 ### Step 2: Add Your Gemini API Key
 Before running the system, ensure you have a valid Gemini API key in `gemini_key.txt`.
 
-### Step 3: Run the RAG Pipeline
+### Step 3: Ollama Model download
+If model is not Downloaded then run the following command
+`ollama run hf.co/NousResearch/Hermes-3-Llama-3.2-3B-GGUF:Q6_K`
+Link to Download Ollama: [Ollama](https://ollama.com/)
+
+### Step 4: Run the RAG Pipeline
 Execute the main script to start processing and querying:
 
 ```bash
