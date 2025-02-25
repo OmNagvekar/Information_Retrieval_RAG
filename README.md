@@ -365,7 +365,7 @@ To cite this repository in publications:
   author = {Om Nagvekar},
   title = {Information Retrieval RAG For Data Extraction from Research Papers},
   year = {2025},
-  howpublished = {\url{https://github.com/huggingface/agents-course}},
+  howpublished = {\url{https://github.com/OmNagvekar/Information_Retrieval_RAG/}},
   note = {GitHub repository},
 }
 ```
