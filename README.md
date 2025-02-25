@@ -16,6 +16,7 @@ omnagvekar-information_retrieval_rag/
 ├── textsplitter.py        # Processes and embeds text chunks for vector storage
 ├── ChatHistory.py         # Contains code to manage history
 ├── gemini_scheme.py       # New schema for Gemini API integration
+├── citation.py            # Handles structured citation extraction and formatting
 ├── gemini_key.txt         # Stores API key for Gemini LLM (Looking for API KEY Not available in Repo as it is API KEY 😊)
 ├── LICENSE                # Added LICENSE File
 ```
@@ -45,6 +46,7 @@ omnagvekar-information_retrieval_rag/
    - **Prompt Engineering**: Constructs custom prompts with examples, ensuring high accuracy in responses for `ChatOllama` Instance LLM.
    - **Schema Validation**: Ensures extracted data adheres to well-defined Pydantic models, reducing inconsistencies.
    - **Context Retrieval**: Implements Self-Query Retriever, Multi-Query Retriever, and Ensemble Retriever for more accurate document retrieval.
+   - **Citation Extraction**: Uses `citation.py` to extract and format structured citations.
 
 ### 5. **Chat History Management**
    - **Context-Aware Conversations**: Maintains chat history for relevant and coherent multi-turn dialogues.
@@ -91,6 +93,7 @@ pip install -r requirements.txt
 ```
 
 ### Additional Tools
+Need only if using `UnstructuredLoader`
 - [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR processing.
 - Note: Do not forgot to add tesseract in enviroment variable after installation (For Windows)
 ---
@@ -100,20 +103,23 @@ pip install -r requirements.txt
 ### Step 1: Prepare Your Documents
 Place the research papers (PDFs) in a directory (default: `./PDF/`).
 
-### Step 2: Run the RAG Pipeline
+### Step 2: Add Your Gemini API Key
+Before running the system, ensure you have a valid Gemini API key in `gemini_key.txt`.
+
+### Step 3: Run the RAG Pipeline
 Execute the main script to start processing and querying:
 
 ```bash
 python main.py
 ```
 
-### Step 3: Query Examples
+### Step 4: Query Examples
 Interact with the system using natural language queries. Examples include:
 - "Provide endurance cycles and retention time for a resistive switching device with p-type CuO."
 - "Analyze switching mechanisms for a device with 5000 nm CuO layers."
 - "Summarize memory characteristics of devices using TiO2 synthesized via PLD."
 
-### Step 4: Manage and Analyze Chat History
+### Step 5: Manage and Analyze Chat History
 - **Save history**: Automatically saves after every session.
 - **Search history**: Use keywords to find past interactions.
 - **Summarize history**: Summarize large histories for concise context.
@@ -125,28 +131,7 @@ Interact with the system using natural language queries. Examples include:
 The RAG system provides responses in a structured JSON format (Sample output. Output will not be always be in this format):
 
 ```json
-  [{
-    "input_data": {
-      "switching_layer_material": "CuO",
-      "synthesis_method": "Chemical",
-      "top_electrode": "Pt",
-      "bottom_electrode": "Au",
-      "switching_layer_thickness": 5000
-    },
-    "output_data": {
-      "type_of_switching": "Resistive",
-      "endurance_cycles": 50000,
-      "retention_time": 10000,
-      "memory_window": 1.2
-    },
-    "reference_information": {
-      "name_of_paper": "Switching Properties of CuO Nanoparticles",
-      "doi": "https://doi.org/10.1234/exampledoi",
-      "year": 2022,
-      "source": "paper.pdf"
-    }
-  },
-
+[
   {
       "data": [
           {
@@ -172,12 +157,106 @@ The RAG system provides responses in a structured JSON format (Sample output. Ou
               "additionalProperties": null
           }
       ]
+  },
+  {
+    "data": [
+        {
+            "numeric_value": null,
+            "switching_layer_material": "CuO",
+            "synthesis_method": null,
+            "top_electrode": "Ag",
+            "top_electrode_thickness": null,
+            "bottom_electrode": "p-Si",
+            "bottom_electrode_thickness": null,
+            "switching_layer_thickness": null,
+            "switching_type": "resistive switching (RS)",
+            "endurance_cycles": 50,
+            "retention_time": null,
+            "memory_window": null,
+            "num_states": "2 (HRS and LRS)",
+            "conduction_mechanism": null,
+            "resistive_switching_mechanism": "Ag filament formation",
+            "additionalProperties": null,
+            "paper_name": "Memristive Devices from CuO Nanoparticles",
+            "source": "1.pdf"
+        }
+    ]
   }
 ]
 
+```
+For citation response format:
+
+```json
+{
+    "citations": [
+        {
+            "Source_ID": 0,
+            "Article_ID": "8ca54a6f-30ed-4ef4-9927-700080b8a23b",
+            "Article_Snippet": "function of the number of cycles, which show the co nsistency and stability in low resistive state (LRS) \nand high resistive state (HRS). The semi-log I-V curv es in Figure 3d give a more accurate picture of \nNDR and RS with a switching ratio of 103. \n\nFigure 3. (a) Current–voltage (I-V) curve of Ag/CuO/SiO 2/p-Si resistive switching and ( b) multiple \nresistive switching up to 50 cycles depicting reproducibility. The inset shows the formation of \nnegative differential resistance (NDR), ( c) endurance performance of Ag/CuO/SiO 2/p-Si, and ( d) semi-\nlog current–voltage characteristics of a multilayer Ag/CuO/SiO 2/p-Si showing NDR and on-off",
+            "Article_Title": "Memristive Devices from CuO Nanoparticles",
+            "Article_Source": "1.pdf"
+        },
+        {
+            "Source_ID": 1,
+            "Article_ID": "beea0861-2de7-4136-b9da-b7cb3b2212d8",
+            "Article_Snippet": "Figure 3b shows a clear cut of the NDR. The current decreases sharply with an increase in potential.\nFigure 3c shows the endurance performance of the device. Resistance was taken as a function of\nthe number of cycles, which show the consistency and stability in low resistive state (LRS) and high\nresistive state (HRS). The semi-log I-V curves in Figure 3d give a more accurate picture of NDR and RS\nwith a switching ratio of 103.\nNanomaterials 2020 , 10, x FOR CONVERSION 4 of 9 \n The I-V characteristics in Figure 3a clearly show  the hysteresis curve, which demonstrates the \nnon-volatile resistive switching along with negative differential resistance. The voltage was swept",
+            "Article_Title": "Memristive Devices from CuO Nanoparticles",
+            "Article_Source": "1.pdf"
+        },
+        {
+            "Source_ID": 2,
+            "Article_ID": "47b089f6-de7a-48dc-92b2-045bbf121156",
+            "Article_Snippet": "Nanomaterials 2020 ,10, 1677 4 of 10\nThe I-V characteristics in Figure 3a clearly show the hysteresis curve, which demonstrates the\nnon-volatile resistive switching along with negative di ﬀerential resistance. The voltage was swept from\n0 » 3 V » 0 »−3 V » 0. A stable resistive switching (RS) is observed when the bias voltage sweeps from\n0 V to 3 V; the current switches from 10−6A to 10−3A at a set voltage of 1.7 V . The device maintains\na low resistive state (LRS) when the bias voltage sweeps back from positive (3 V) to negative ( −0.7\nV), NDR is observed at −0.8 V , and the device switches o ﬀ. Figure 3b demonstrates repeatability in\nswitching up to 50 cycles, emphasizing the reproducibility and stability of the device. The inset in",
+            "Article_Title": "Memristive Devices from CuO Nanoparticles",
+            "Article_Source": "1.pdf"
+        },
+        {
+            "Source_ID": 3,
+            "Article_ID": "6edd1459-8aad-4937-bfb6-6d64d1da06f0",
+            "Article_Snippet": "To further investigate the role of native oxide, p- Si, and Ag, we fabricated a device consisting of \nITO as the bottom electrode. Figure 6 shows the I-V characteristics of the device with Ag as a top \nelectrode and ITO as a bottom electr ode with CuO nanoparticles acting as an active layer. In the absence \nof SiO 2, the device showed resistive switching with out NDR. The switching was described by the \nformation of Ag filament based on the linear I-V ch aracteristics. The device did not show NDR in the \nabsence of oxide. The abrupt uncont rollable switching also  characterizes the absence of native oxide. \nThe results showed no NDR in the case of Ag/C uO/ITO, and we inferred that NDR in Ag/CuO/SiO 2/p-",
+            "Article_Title": "Memristive Devices from CuO Nanoparticles",
+            "Article_Source": "1.pdf"
+        },
+        {
+            "Source_ID": 4,
+            "Article_ID": "e54da728-8e6e-4cb3-8435-1fd7a22eeabf",
+            "Article_Snippet": "injected current in response to applied voltage [27]. The interaction of the injected carriers in defect states affects the magnitude of current, which al so affects the current–vo ltage characteristics. \nFigure 3. (a) Current–voltage (I-V) curve of Ag /CuO/SiO 2/p-Si resistive switching and ( b) multiple\nresistive switching up to 50 cycles depicting reproducibility. The inset shows the formation of negative\ndiﬀerential resistance (NDR), ( c) endurance performance of Ag /CuO/SiO 2/p-Si, and ( d) semi-log\ncurrent–voltage characteristics of a multilayer Ag /CuO/SiO 2/p-Si showing NDR and on-o ﬀconductance\nof 1×103in the positive region. The voltage was swept from −3 V to 3 V . The V setand V reset are 1.5 V\nand−0.65 V .",
+            "Article_Title": "Memristive Devices from CuO Nanoparticles",
+            "Article_Source": "1.pdf"
+        },
+        {
+            "Source_ID": 5,
+            "Article_ID": "93bcf96d-3ef8-4b5c-b891-b33d3716a30f",
+            "Article_Snippet": "from 0 » 3 V » 0 » −3 V » 0. A stable resistive switching (RS) is observed when the bias voltage sweeps \nfrom 0 V to 3 V; the current switches from 10−6 A to 10−3 A at a set voltage of 1.7 V. The device \nmaintains a low resistive state (LRS) when the bias  voltage sweeps back from positive (3 V) to \nnegative ( −0.7 V), NDR is observed at −0.8 V, and the device switches off. Figure 3b demonstrates \nrepeatability in switching up to 50 cycles, emphasiz ing the reproducibility and stability of the device. \nThe inset in Figure 3b shows a clear cut of the ND R. The current decreases sharply with an increase \nin potential. Figure 3c shows the endurance perf ormance of the device. Resistance was taken as a",
+            "Article_Title": "Memristive Devices from CuO Nanoparticles",
+            "Article_Source": "1.pdf"
+        },
+        {
+            "Source_ID": 6,
+            "Article_ID": "bd69dcf5-6c25-4bc8-9e08-9a61550eefbe",
+            "Article_Snippet": "ITO as the bottom electrode. Figure 6 shows the I-V characteristics of the device with Ag as a top \nelectrode and ITO as a bottom electrode with CuO nanopa rticles acting as an active layer. In the absence \nof SiO\n2, the device showed resistive switching with out NDR. The switching was described by the \nformation of Ag filament based on the linear I-V ch aracteristics. The device did not show NDR in the \nabsence of oxide. The abrupt uncont rollable switching also characteri zes the absence of native oxide. \nThe results showed no NDR in the case of Ag/C uO/ITO, and we inferred that NDR in Ag/CuO/SiO 2/p-",
+            "Article_Title": "Memristive Devices from CuO Nanoparticles",
+            "Article_Source": "1.pdf"
+        },
+        {
+            "Source_ID": 7,
+            "Article_ID": "7d481d67-b8b9-44e6-bdad-a97284670549",
+            "Article_Snippet": "Received: 17 July 2020; Accepted: 23 August 2020; Published: 26 August 2020\n/gid00030/gid00035/gid00032/gid00030/gid00038/gid00001/gid00033/gid00042/gid00045 /gid00001\n/gid00048/gid00043/gid00031/gid00028/gid00047/gid00032/gid00046\nAbstract: Memristive systems can provide a novel strategy to conquer the von Neumann bottleneck\nby evaluating information where data are located in situ. To meet the rising of artiﬁcial neural\nnetwork (ANN) demand, the implementation of memristor arrays capable of performing matrix\nmultiplication requires highly reproducible devices with low variability and high reliability. Hence,\nwe present an Ag /CuO/SiO 2/p-Si heterostructure device that exhibits both resistive switching (RS)",
+            "Article_Title": "Memristive Devices from CuO Nanoparticles",
+            "Article_Source": "1.pdf"
+        },
+        {
+            "Source_ID": 8,
+            "Article_ID": "4e58a51e-be24-473c-a7ca-dd70657ebe8f",
+            "Article_Snippet": "conﬁned the ﬁlament rupture and reduced the reset variability. Reset was primarily inﬂuenced by\nthe ﬁlament rupture and detrapping in the native oxide that facilitated smooth reset and NDR in\nthe device. The resistive switching originated from traps in the localized states of amorphous CuO.\nThe set process was mainly dominated by the trap-controlled space-charge-limited; this led to a\ntransition into a Poole–Frenkel conduction. This research opens up new possibilities to improve the\nswitching parameters and promote the application of RS along with NDR.\nKeywords: CuO nanomaterials; negative di ﬀerential resistance; Poole–Frenkel conduction; switching\nratio; resistive switching; space charge limited current\n2. Materials and Methods",
+            "Article_Title": "Memristive Devices from CuO Nanoparticles",
+            "Article_Source": "1.pdf"
+        }
+    ]
+}
 
 ```
-
 ---
 
 ## Key Classes and Methods
@@ -187,8 +266,11 @@ The RAG system provides responses in a structured JSON format (Sample output. Ou
 - **`Methods:`**:
     - `create_vectors()`: Processes PDFs, extracts text, generates embeddings, and stores them in ChromaDB.
     - `retrieve_context()`: Implements Self-Query Retriever, Multi-Query Retriever, and Ensemble Retriever for accurate document retrieval.
-    - `generate_response()`: Uses ChatOllama to produce structured, schema-validated responses.
+    - `generate_response()`: Uses ChatOllama or Gemini API to produce structured, schema-validated responses and extracts structured citations.
     - `create_prompt_template()`: Generates contextual prompts for better response accuracy.
+    - `preprocess_text()`: Improved text processing and data normalization.
+    - `extract_citations()`: Uses Kor-based processing to extract citation data.
+
 
 ### **`document_loader.py`**
 - **`DocLoader`**: Handles PDF loading and parsing.
@@ -208,6 +290,10 @@ The RAG system provides responses in a structured JSON format (Sample output. Ou
 ### **`scheme.py`**
 - Defines schemas for structured data extraction.
   - Models include `Extract_Text` and `Data` for validated output.
+
+### **`citation.py`**
+- Defines schemas for structured citation extraction.
+  - Models include `Citation` and `Citations` for validated output.
 
 ### **`main.py`**
 - Initializes RAGChatAssistant and executes sample queries.
@@ -247,10 +333,7 @@ The RAG system provides responses in a structured JSON format (Sample output. Ou
 
 ## Future Work
 
-- Extend support for additional document formats (e.g., Word, Excel).
 - Implement dynamic schema generation for custom queries.
-- Integrate advanced summarization and sentiment analysis for chat histories.
-- Add visualization tools for insights like topic distributions.
 - Develop Full Stack Application with Frontend for user intreaction on the web.
 
 ---
@@ -264,12 +347,6 @@ Contributions are welcome! To contribute:
 
 ---
 
-## License
-
-This project is licensed under the [GPL-3.0 license](LICENSE).
-
----
-
 ## Contact
 
 For any questions or suggestions, feel free to contact on below Contact details:
@@ -277,5 +354,25 @@ For any questions or suggestions, feel free to contact on below Contact details:
 - Om Nagvekar Portfolio Website, Email: https://omnagvekar.github.io/ , omnagvekar29@gmail.com
 - GitHub Profile:
    - Om Nagvekar: https://github.com/OmNagvekar
+
+---
+
+## Citing the project
+To cite this repository in publications:
+
+```bibtex
+@misc{Information_Retrieval_RAG,
+  author = {Om Nagvekar},
+  title = {Information Retrieval RAG For Data Extraction from Research Papers},
+  year = {2025},
+  howpublished = {\url{https://github.com/huggingface/agents-course}},
+  note = {GitHub repository},
+}
+```
+---
+
+## License
+
+This project is licensed under the [GPL-3.0 license](LICENSE).
 
 ---

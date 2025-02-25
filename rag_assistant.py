@@ -122,170 +122,58 @@ class RAGChatAssistant:
         logger.info("Creating prompt template.")
         examples = [
             {
-                "input": "Extract the following data from the provided PDF and present it in a table: "
-                    "(1) Input Data: switching layer material (TYM_Class), Synthesis method (SM_Class), Top electrode (TE_Class), "
-                    "Thickness of Top electrode (TTE in nm), Bottom electrode (BE_Class), Thickness of bottom electrode (TBE in nm), "
-                    "Thickness of switching layer (TSL in nm); "
-                    "(2) Output Data: Type of Switching (TSUB_Class), Endurance (Cycles) (EC), Retention Time (RT in seconds), "
-                    "Memory Window (MW in V), No. of states (MRS_Class), Conduction mechanism type (CM_Class), "
-                    "Resistive Switching mechanism (RSM_Class); "
-                    "(3) Reference Information: Name of the paper, DOI, Year.",
-                "output": {
-                    "input_data": {
-                        "switching_layer_material": "CuO Nanoparticles",
-                        "synthesis_method": "Chemical",
-                        "top_electrode": "Platinum",
-                        "thickness_of_top_electrode": 10,
-                        "bottom_electrode": "Gold",
-                        "thickness_of_bottom_electrode": 20,
-                        "thickness_of_switching_layer": 5000
-                    },
-                    "output_data": {
-                        "type_of_switching": "Resistive",
-                        "endurance_cycles": 50,
-                        "retention_time": 10000,
-                        "memory_window": 1.2,
-                        "number_of_states": "Binary",
-                        "conduction_mechanism_type": "Space-Charge Limited Conduction",
-                        "resistive_switching_mechanism": "Filamentary"
-                    },
-                    "reference_information": {
-                        "name_of_paper": "Switching Properties of CuO Nanoparticles",
-                        "doi": "https://doi.org/10.1234/exampledoi",
-                        "year": 2022,
-                        "source":"C:\\Users\\Om Nagvekar\\OneDrive\\Documents\\KIT Assaignment & Notes& ISRO\\Shivaji University Nanoscience Dept. Projects\\IRP\\PDF\\1.pdf"
-                    }
-                }
-            },
+                "query":"""
+                        Please read the provided PDF thoroughly and extract the following quantities. Your output must be a table with two columns: "Quantity" and "Extracted Value". For each of the items listed below, provide the extracted value exactly as it appears in the document. If an item is not found, simply enter "N/A" for that field. Ensure that any numerical values include their associated units (if applicable) and that you handle multiple values consistently.
 
-            {
-                "input": "Analyze the switching characteristics of a material synthesized via chemical methods",
-                "output": {
-                    "material_type": "CuO Nanoparticles",
-                    "synthesis_method": "Chemical",
-                    "switching_type": "Resistive",
-                    "endurance_cycles": 50,
-                    "retention_time": 1000,
-                    "memory_window": 1000,
-                    "paper_details": {
-                        "title": "Memristive Devices from CuO Nanoparticles",
-                        "doi": "https://doi.org/10.3390/nano10091677",
-                        "year": 2020,
-                        "source":"8.pdf"
+                        Extract the following items:
+                        - switching layer material
+                        - synthesis method
+                        - top electrode
+                        - thickness of top electrode in nanometers
+                        - bottom electrode
+                        - thickness of bottom electrode in nanometers
+                        - thickness of switching layer in nanometers
+                        - type of switching
+                        - endurance
+                        - retention time in seconds
+                        - memory window in volts
+                        - number of states
+                        - conduction mechanism type
+                        - resistive switching mechanism
+                        - paper name
+                        - source (pdf file name)
+
+                        Instructions:
+                        1. Analyze the entire PDF document to locate all references to the above items.
+                        2. Extract each quantity with precision; include any units and relevant details.
+                        3. If multiple values are present for a single item, list them clearly (e.g., separated by commas).
+                        4. Format your output strictly as a table with two columns: one for the "Quantity" and one for the "Extracted Value".
+                        5. Do not include any extra text, headings, or commentary—only the table is required.
+                        6. If an item cannot be found, record it as "N/A" in the "Extracted Value" column.
+
+                        """
+                ,"data": [
+                    {
+                        "numeric_value": "Set voltage 1.5v and Reset Voltage -0.65v",
+                        "switching_layer_material": "CuO",
+                        "synthesis_method": "Soluton Processable",
+                        "top_electrode": "Ag",
+                        "top_electrode_thickness": 500,
+                        "bottom_electrode": "p-Si",
+                        "bottom_electrode_thickness": 100,
+                        "switching_layer_thickness": 250,
+                        "switching_type": "resistive switching (RS)",
+                        "endurance_cycles": 50,
+                        "retention_time": 1000,
+                        "memory_window": 1000,
+                        "num_states": "2 (HRS and LRS)",
+                        "conduction_mechanism": "Bulk",
+                        "resistive_switching_mechanism": "Ag filament formation",
+                        "additionalProperties": "Type of Switching Bipolar",
+                        "paper_name": "Memristive Devices from CuO Nanoparticles",
+                        "source": "1.pdf"
                     }
-                }
-            },
-            {
-                "input": "Provide retention time and endurance cycles for a material using p-type CuO",
-                "output": {
-                    "material_type": "p-type CuO",
-                    "endurance_cycles": 18,
-                    "retention_time": 10000,
-                    "memory_window": 10000000,
-                    "paper_details": {
-                        "title": "Resistive switching memory effects in p-type h-CuI/CuO heterojunctions",
-                        "doi": "https://doi.org/10.1063/5.0010839",
-                        "year": 2020,
-                        "source":"C:\\Users\\User\\OneDrive\\Documents\\KIT Assaignment & Notes& ISRO\\PDF\\8.pdf"
-                    }
-                }
-            },
-            {
-                "input": "Details about switching layer with 5000 nm thickness and its mechanisms",
-                "output": {
-                    "switching_layer_thickness": 5000,
-                    "conduction_mechanism": "Type 1",
-                    "switching_mechanism": "Resistive",
-                    "paper_details": {
-                        "title": "Facile synthesis and nanoscale related physical properties of CuO nanostructures",
-                        "doi": "https://doi.org/10.1016/j.apsusc.2019.144903",
-                        "year": 2020,
-                        "source":"C:\\Users\\User\\Documents\\KIT Assaignment & Notes& ISRO\\PDF\\8.pdf"
-                    }
-                }
-            },
-            {
-                "input": "Analyze the performance of a resistive switching device with a switching layer synthesized via ALD and a top electrode of Pt.",
-                "output": {
-                    "material_type": "HfO2",
-                    "synthesis_method": "Atomic Layer Deposition",
-                    "switching_type": "Bipolar",
-                    "endurance_cycles": 1_000_000,
-                    "retention_time": 3600,
-                    "memory_window": 2.5,
-                    "paper_details": {
-                        "title": "Resistive Switching in HfO2-Based Devices",
-                        "doi": "https://doi.org/10.1016/j.jmatpro.2021.03.012",
-                        "year": 2021,
-                        "source":"4.pdf"
-                    }
-                }
-            },
-            {
-                "input": "Provide details of a device with an 8 nm Al2O3 switching layer synthesized via Sol-Gel.",
-                "output": {
-                    "material_type": "Al2O3",
-                    "switching_layer_thickness": 8,
-                    "synthesis_method": "Sol-Gel",
-                    "switching_type": "Unipolar",
-                    "endurance_cycles": 500_000,
-                    "retention_time": 7200,
-                    "memory_window": 1.8,
-                    "paper_details": {
-                        "title": "Switching Characteristics of Al2O3 Layers",
-                        "doi": "https://doi.org/10.5678/j.matsci.2020.045",
-                        "year": 2020,
-                        "source":"Switching.pdf"
-                    }
-                }
-            },
-            {
-                "input": "Details of a resistive switching device using TiO2 synthesized via PLD, with a switching layer thickness of 15 nm.",
-                "output": {
-                    "material_type": "TiO2",
-                    "switching_layer_thickness": 15,
-                    "synthesis_method": "Pulsed Laser Deposition",
-                    "switching_type": "Bipolar",
-                    "endurance_cycles": 2_000_000,
-                    "retention_time": 10_800,
-                    "memory_window": 3.2,
-                    "paper_details": {
-                        "title": "Advances in TiO2-Based Resistive Switching",
-                        "doi": "https://doi.org/10.9101/j.nano2020.112",
-                        "year": 2020,
-                        "source":"Resistive_Switching.pdf"
-                    }
-                }
-            },
-            {
-                "input": "Analyze the switching mechanisms of a device with a 5000 nm thick CuO switching layer.",
-                "output": {
-                    "switching_layer_thickness": 5000,
-                    "material_type": "CuO",
-                    "conduction_mechanism": "Space Charge Limited Conduction",
-                    "switching_mechanism": "Filamentary",
-                    "paper_details": {
-                        "title": "Synthesis and Applications of CuO Nanostructures",
-                        "doi": "https://doi.org/10.1021/acsnano.2020.1234",
-                        "year": 2020,
-                        "source":"Synthesis_and_Applications_of_CuO_Nanostructures.pdf"
-                    }
-                }
-            },
-            {
-                "input": "Provide endurance cycles and retention time for a resistive switching device with Au top electrode and Al2O3 switching layer.",
-                "output": {
-                    "material_type": "Al2O3",
-                    "top_electrode": "Au",
-                    "endurance_cycles": 750_000,
-                    "retention_time": 5400,
-                    "paper_details": {
-                        "title": "Unipolar Switching in Al2O3 Devices",
-                        "doi": "https://doi.org/10.1007/snano.2022.008",
-                        "year": 2022,
-                        "source":"paper.pdf"
-                    }
-                }
+                ]
             },
         ]
         # Convert examples to message format
