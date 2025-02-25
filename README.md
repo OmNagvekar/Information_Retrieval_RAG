@@ -118,13 +118,13 @@ Execute the main script to start processing and querying:
 python main.py
 ```
 
-### Step 4: Query Examples
+### Step 5: Query Examples
 Interact with the system using natural language queries. Examples include:
 - "Provide endurance cycles and retention time for a resistive switching device with p-type CuO."
 - "Analyze switching mechanisms for a device with 5000 nm CuO layers."
 - "Summarize memory characteristics of devices using TiO2 synthesized via PLD."
 
-### Step 5: Manage and Analyze Chat History
+### Step 6: Manage and Analyze Chat History
 - **Save history**: Automatically saves after every session.
 - **Search history**: Use keywords to find past interactions.
 - **Summarize history**: Summarize large histories for concise context.
