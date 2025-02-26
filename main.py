@@ -88,7 +88,7 @@ def delete_old_logs():
 if __name__=="__main__":
     cleanup_thread = threading.Thread(target=delete_old_logs, daemon=True)
     cleanup_thread.start()
-    obj = RAGChatAssistant(user_id="abc_123",remote_llm=True)
+    obj = RAGChatAssistant(user_id="abc_123",remote_llm=False)
     # obj.clear_chat_history()
     result = obj.generate_response("""
         Please read the provided PDF thoroughly and extract the following quantities. Your output must be a table with two columns: "Quantity" and "Extracted Value". For each of the items listed below, provide the extracted value exactly as it appears in the document. If an item is not found, simply enter "N/A" for that field. Ensure that any numerical values include their associated units (if applicable) and that you handle multiple values consistently.

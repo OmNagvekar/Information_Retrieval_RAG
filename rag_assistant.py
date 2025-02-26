@@ -12,7 +12,8 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from typing import List, Dict, Any
-from langchain_ollama.chat_models import ChatOllama
+# from langchain_ollama.chat_models import ChatOllama #delete this later on
+from langchain_huggingface import HuggingFacePipeline,ChatHuggingFace
 from langchain_core.output_parsers import PydanticOutputParser
 import torch
 import json
@@ -36,7 +37,7 @@ REQUESTS = 2
 PERIOD = 60  # seconds
 
 class RAGChatAssistant:
-    def __init__(self,user_id:str,dirpath:str="./PDF/",remote_llm:bool=False,ollama_model:str='hf.co/NousResearch/Hermes-3-Llama-3.2-3B-GGUF:Q6_K'):
+    def __init__(self,user_id:str,dirpath:str="./PDF/",remote_llm:bool=False,hf_model:str='NousResearch/Hermes-3-Llama-3.2-3B'):
         logger.info("Initializing RAGChatAssistant")
         # path to uploaded/local pdf's
         self.dirpath = dirpath
@@ -60,20 +61,33 @@ class RAGChatAssistant:
                 logger.info("LLM initialized with gemini-1.5-flash")
             except Exception as e:
                 logger.error("Failed to intialize the Gemini LLM gemini-1.5-flash %s",str(e))
-                self.llm = ChatOllama(model=ollama_model,device=self.device,temperature = 0.5,request_timeout=360.0,format='json')
-                self.llm2 =ChatOllama(model=ollama_model,device=self.device,temperature = 0.5,request_timeout=360.0)
-                logger.info(f"LLM initialized with {ollama_model}")
+                llm = HuggingFacePipeline.from_model_id(
+                    model_id=hf_model,
+                    task="text-generation",
+                    model_kwargs={"temperature": 0.5,"device":self.device}
+                )
+                chat_model = ChatHuggingFace(llm=llm)
+                self.llm = chat_model.with_structured_output(Data_Objects)
+                self.llm_citation = chat_model
+                self.llm2 = chat_model
+                logger.info(f"LLM initialized with {hf_model}")
                 # Pydantic output parser
-                self.output_parser = PydanticOutputParser(pydantic_object=Data)
+                self.output_parser = PydanticOutputParser(pydantic_object=Data_Objects)
                 self.remote_llm=False
         else:
-            self.llm = ChatOllama(model=ollama_model,device=self.device,temperature = 0.5,request_timeout=360.0,format='json')
-            self.llm2 =ChatOllama(model=ollama_model,device=self.device,temperature = 0.5,request_timeout=360.0)
-            logger.info(f"LLM initialized with {ollama_model}")
+            llm = HuggingFacePipeline.from_model_id(
+                model_id=hf_model,
+                task="text-generation",
+                model_kwargs={"temperature": 0.5,"device":self.device}
+            )
+            chat_model = ChatHuggingFace(llm=llm)
+            self.llm = chat_model.with_structured_output(Data_Objects)
+            self.llm_citation = chat_model
+            self.llm2 = chat_model
+            logger.info(f"LLM initialized with {hf_model}")
             # Pydantic output parser
-            self.output_parser = PydanticOutputParser(pydantic_object=Data)
-        # Structured LLM
-        # self.structured_llm = self.llm.with_structured_output(schema=Data)
+            self.output_parser = PydanticOutputParser(pydantic_object=Data_Objects)
+
         # Loading vectore store
         if os.path.exists("./chroma_db"):
             print("\n Skipping creating indexes as local index is present \n")
@@ -180,8 +194,8 @@ class RAGChatAssistant:
         example_messages = []
         for example in examples:
             example_messages.extend([
-                HumanMessage(content=example["input"]),
-                AIMessage(content=str(example["output"]))
+                HumanMessage(content=example["query"]),
+                AIMessage(content=str(example["data"]))
             ])
         if not self.remote_llm:
             prompt_template = ChatPromptTemplate.from_messages(
@@ -588,6 +602,7 @@ class RAGChatAssistant:
         try:
             # Prepare chain
             non_structured_chain = prompt_template | self.llm2
+            chain = prompt_template | self.llm
             if self.remote_llm:
                 non_structured_response = non_structured_chain.invoke({
                     "history": self.chat_history_manager.get_message_history(limit=2),
@@ -622,33 +637,50 @@ class RAGChatAssistant:
                     "citations":citations_response
                 }
             else:
-                response = chain.invoke({
-                    "history": self.chat_history_manager.get_message_history(limit=2),
-                    "examples": best_example,
-                    "context":context_messages,
-                    "query": query
-                })
-                # parse the JSON response
-                raw_response = json.loads(response.content)
-                data= Data(data=[Extract_Text(**raw_response)])
-                # parse the output by schema
-                parser_output=self.output_parser.invoke(data.to_json_string())
-                # Add messages to chat hisory
+                
+                
+                try:
+                    non_structured_response = non_structured_chain.invoke({
+                        "history": self.chat_history_manager.get_message_history(limit=2),
+                        "examples": best_example,
+                        "context":context_messages,
+                        "query": query
+                    })
+                    structured_response = self.preprocess_text(non_structured_response.content)
+                    structured_response = Data_Objects(data=[Extract_Data(**structured_response)])
+                    structured_response = structured_response.to_json_string()
+                    citations_response = self.extract_citations(context_messages)
+                except Exception as e:
+                    logger.error("Exception occurred in Parsing: %s", str(e))
+                    structured_response = chain.invoke({
+                        "history": self.chat_history_manager.get_message_history(limit=2),
+                        "examples": best_example,
+                        "context":context_messages,
+                        "query": query
+                    })
+                    structured_response = structured_response.to_json_string()
+                    citations_response = self.extract_citations(context_messages)
+                    logger.info("Used Structured LLM on non_structured_response")
+
+                import pathlib
+                pathlib.Path("./filtered_output/context" + ".txt").write_bytes(str(context_messages).encode())
+                pathlib.Path("./filtered_output/sample_response" + ".json").write_bytes(structured_response.encode())
+                pathlib.Path("./filtered_output/citation_response" + ".json").write_bytes(citations_response.encode())
                 self.chat_history_manager.add_user_message(query)
-                self.chat_history_manager.add_ai_message(response.content)
+                self.chat_history_manager.add_ai_message(structured_response)
                 self.chat_history_manager.save_history()
                 return {
-                    "response": response.content,
-                    "context_docs": context_docs,
-                    "validated_output":parser_output
+                    "structured_response":structured_response,
+                    "non_Structured_response":non_structured_response.content,
+                    "citations":citations_response
                 }
         except Exception as e:
             print(f"Error generating response: {e}")
             logger.error("Exception occurred: %s", str(e))
             return {
-                "response": "I'm sorry, I couldn't process your request.",
-                "context_docs": [],
-                "validated_output":""
+                "structured_response":"I'm sorry, I couldn't process your request.",
+                "non_Structured_response":"I'm sorry, I couldn't process your request.",
+                "citations":"I'm sorry, I couldn't process your request."
             }
 
 

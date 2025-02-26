@@ -52,7 +52,7 @@ class Extract_Data(BaseModel):
             "or other specific classifications used to describe the resistive behavior."
         )
     )
-    endurance_cycles: Optional[int] = Field(default=None, description=(
+    endurance_cycles: Optional[Union[int,str]] = Field(default=None, description=(
             "The number of switching cycles the device can endure before failure. This integer value indicates "
             "the durability and reliability of the device under repeated use."
         )
