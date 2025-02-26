@@ -14,6 +14,7 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from typing import List, Dict, Any
 # from langchain_ollama.chat_models import ChatOllama #delete this later on
 from langchain_huggingface import HuggingFacePipeline,ChatHuggingFace
+from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 from langchain_core.output_parsers import PydanticOutputParser
 import torch
 import json
@@ -37,7 +38,7 @@ REQUESTS = 2
 PERIOD = 60  # seconds
 
 class RAGChatAssistant:
-    def __init__(self,user_id:str,dirpath:str="./PDF/",remote_llm:bool=False,hf_model:str='NousResearch/Hermes-3-Llama-3.2-3B'):
+    def __init__(self,user_id:str,dirpath:str="./PDF/",remote_llm:bool=False,hf_model:str='NousResearch/Hermes-3-Llama-3.2-3B-GGUF',filename:str="Hermes-3-Llama-3.2-3B.Q4_K_M.gguf"):
         logger.info("Initializing RAGChatAssistant")
         # path to uploaded/local pdf's
         self.dirpath = dirpath
@@ -61,25 +62,27 @@ class RAGChatAssistant:
                 logger.info("LLM initialized with gemini-1.5-flash")
             except Exception as e:
                 logger.error("Failed to intialize the Gemini LLM gemini-1.5-flash %s",str(e))
-                llm = HuggingFacePipeline.from_model_id(
-                    model_id=hf_model,
-                    task="text-generation",
-                    model_kwargs={"temperature": 0.5,"device":self.device}
+                tokenizer = AutoTokenizer.from_pretrained(hf_model, gguf_file=filename)
+                model = AutoModelForCausalLM.from_pretrained(hf_model, gguf_file=filename)
+                pipe = pipeline(
+                    "text-generation", model=model, tokenizer=tokenizer,device=self.device,temperature=0.5
                 )
+                llm = HuggingFacePipeline(pipline=pipe)
                 chat_model = ChatHuggingFace(llm=llm)
                 self.llm = chat_model.with_structured_output(Data_Objects)
                 self.llm_citation = chat_model
                 self.llm2 = chat_model
-                logger.info(f"LLM initialized with {hf_model}")
+                logger.info(f"LLM initialized with {hf_model} {filename}")
                 # Pydantic output parser
                 self.output_parser = PydanticOutputParser(pydantic_object=Data_Objects)
                 self.remote_llm=False
         else:
-            llm = HuggingFacePipeline.from_model_id(
-                model_id=hf_model,
-                task="text-generation",
-                model_kwargs={"temperature": 0.5,"device":self.device}
+            tokenizer = AutoTokenizer.from_pretrained(hf_model, gguf_file=filename)
+            model = AutoModelForCausalLM.from_pretrained(hf_model, gguf_file=filename)
+            pipe = pipeline(
+                "text-generation", model=model, tokenizer=tokenizer,device=self.device,temperature=0.5
             )
+            llm = HuggingFacePipeline(pipline=pipe)
             chat_model = ChatHuggingFace(llm=llm)
             self.llm = chat_model.with_structured_output(Data_Objects)
             self.llm_citation = chat_model
