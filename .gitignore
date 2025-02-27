@@ -7,3 +7,4 @@ filtered_output/
 *.log
 Logs/
 /gemini_key.txt
+model_cache/

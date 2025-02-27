@@ -31,6 +31,9 @@ from typing import Optional
 from kor.extraction import create_extraction_chain
 from kor import from_pydantic
 
+# Define your cache directory and ensure it exists
+cache_dir = "./model_cache"
+os.makedirs(cache_dir, exist_ok=True)
 
 logger = logging.getLogger(__name__)
 # Define rate limiter (2 requests per minute)
@@ -38,7 +41,7 @@ REQUESTS = 2
 PERIOD = 60  # seconds
 
 class RAGChatAssistant:
-    def __init__(self,user_id:str,dirpath:str="./PDF/",remote_llm:bool=False,hf_model:str='NousResearch/Hermes-3-Llama-3.2-3B-GGUF',filename:str="Hermes-3-Llama-3.2-3B.Q4_K_M.gguf"):
+    def __init__(self,user_id:str,dirpath:str="./PDF/",remote_llm:bool=False,hf_model:str='NousResearch/Hermes-3-Llama-3.2-3B'):
         logger.info("Initializing RAGChatAssistant")
         # path to uploaded/local pdf's
         self.dirpath = dirpath
@@ -49,8 +52,8 @@ class RAGChatAssistant:
         self.chat_history_manager = ChatHistoryManager(user_id=user_id)
         #LLM
         self.remote_llm =remote_llm
-        if remote_llm:
-            try:
+        try:
+            if remote_llm:
                 with open("gemini_key.txt",'r') as f:
                     key = f.read()
                 llm = ChatGoogleGenerativeAI(model='gemini-1.5-flash',max_retries=2,google_api_key=key,disable_streaming=False,convert_system_message_to_human=True,temperature=0.5,cache=False)
@@ -60,10 +63,9 @@ class RAGChatAssistant:
                 # Pydantic output parser
                 self.output_parser = PydanticOutputParser(pydantic_object=Data_Objects)
                 logger.info("LLM initialized with gemini-1.5-flash")
-            except Exception as e:
-                logger.error("Failed to intialize the Gemini LLM gemini-1.5-flash %s",str(e))
-                tokenizer = AutoTokenizer.from_pretrained(hf_model, gguf_file=filename)
-                model = AutoModelForCausalLM.from_pretrained(hf_model, gguf_file=filename)
+            else:
+                tokenizer = AutoTokenizer.from_pretrained(hf_model,cache_dir=cache_dir)
+                model = AutoModelForCausalLM.from_pretrained(hf_model,cache_dir=cache_dir)
                 pipe = pipeline(
                     "text-generation", model=model, tokenizer=tokenizer,device=self.device,temperature=0.5
                 )
@@ -72,24 +74,11 @@ class RAGChatAssistant:
                 self.llm = chat_model.with_structured_output(Data_Objects)
                 self.llm_citation = chat_model
                 self.llm2 = chat_model
-                logger.info(f"LLM initialized with {hf_model} {filename}")
+                logger.info(f"LLM initialized with {hf_model}")
                 # Pydantic output parser
                 self.output_parser = PydanticOutputParser(pydantic_object=Data_Objects)
-                self.remote_llm=False
-        else:
-            tokenizer = AutoTokenizer.from_pretrained(hf_model, gguf_file=filename)
-            model = AutoModelForCausalLM.from_pretrained(hf_model, gguf_file=filename)
-            pipe = pipeline(
-                "text-generation", model=model, tokenizer=tokenizer,device=self.device,temperature=0.5
-            )
-            llm = HuggingFacePipeline(pipline=pipe)
-            chat_model = ChatHuggingFace(llm=llm)
-            self.llm = chat_model.with_structured_output(Data_Objects)
-            self.llm_citation = chat_model
-            self.llm2 = chat_model
-            logger.info(f"LLM initialized with {hf_model}")
-            # Pydantic output parser
-            self.output_parser = PydanticOutputParser(pydantic_object=Data_Objects)
+        except Exception as e:
+            logger.error("Failed to intialize LLM  %s",str(e))
 
         # Loading vectore store
         if os.path.exists("./chroma_db"):
@@ -643,6 +632,17 @@ class RAGChatAssistant:
                 
                 
                 try:
+                    structured_response = chain.invoke({
+                        "history": self.chat_history_manager.get_message_history(limit=2),
+                        "examples": best_example,
+                        "context":context_messages,
+                        "query": query
+                    })
+                    structured_response = structured_response.to_json_string()
+                    citations_response = self.extract_citations(context_messages)
+                    logger.info("Used Structured LLM")
+                except Exception as e:
+                    logger.error("Exception occurred in Parsing: %s", str(e))
                     non_structured_response = non_structured_chain.invoke({
                         "history": self.chat_history_manager.get_message_history(limit=2),
                         "examples": best_example,
@@ -653,17 +653,7 @@ class RAGChatAssistant:
                     structured_response = Data_Objects(data=[Extract_Data(**structured_response)])
                     structured_response = structured_response.to_json_string()
                     citations_response = self.extract_citations(context_messages)
-                except Exception as e:
-                    logger.error("Exception occurred in Parsing: %s", str(e))
-                    structured_response = chain.invoke({
-                        "history": self.chat_history_manager.get_message_history(limit=2),
-                        "examples": best_example,
-                        "context":context_messages,
-                        "query": query
-                    })
-                    structured_response = structured_response.to_json_string()
-                    citations_response = self.extract_citations(context_messages)
-                    logger.info("Used Structured LLM on non_structured_response")
+                    logger.info("Used Structured parsing on non_structured_response")
 
                 import pathlib
                 pathlib.Path("./filtered_output/context" + ".txt").write_bytes(str(context_messages).encode())
