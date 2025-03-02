@@ -24,7 +24,7 @@ class ProcessText:
             self.embed_model = HuggingFaceEmbeddings(
                 model_name=embed_model,
                 model_kwargs= {'device':f'{device}'},
-                cache_folder = cache_dir
+               # cache_folder = cache_dir
             )
             logger.info("Successfully initialized embedding model: %s", embed_model)
         except Exception as e:

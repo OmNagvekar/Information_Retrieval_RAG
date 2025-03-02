@@ -13,8 +13,10 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from typing import List, Dict, Any
 # from langchain_ollama.chat_models import ChatOllama #delete this later on
-from langchain_huggingface import HuggingFacePipeline,ChatHuggingFace
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+from langchain_huggingface import HuggingFacePipeline,ChatHuggingFace #to remove
+from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline #to remove
+from langchain_community.llms import LlamaCpp
+from langchain_core.callbacks import CallbackManager, StreamingStdOutCallbackHandler
 from langchain_core.output_parsers import PydanticOutputParser
 import torch
 import json
@@ -64,16 +66,34 @@ class RAGChatAssistant:
                 self.output_parser = PydanticOutputParser(pydantic_object=Data_Objects)
                 logger.info("LLM initialized with gemini-1.5-flash")
             else:
-                tokenizer = AutoTokenizer.from_pretrained(hf_model,cache_dir=cache_dir)
-                model = AutoModelForCausalLM.from_pretrained(hf_model,cache_dir=cache_dir)
-                pipe = pipeline(
-                    "text-generation", model=model, tokenizer=tokenizer,device=self.device,temperature=0.5
+                # Callbacks support token-wise streaming
+                callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
+                llm = LlamaCpp(
+                    model_path="./model_cache/models--NousResearch--Hermes-3-Llama-3.2-3B-GGUF/snapshots/3cd927095d8cbab12c743f932aa63b6f7bbfa141/Hermes-3-Llama-3.2-3B.Q4_K_M.gguf",
+                    temperature=0.5,
+                    max_tokens=512,
+                    top_p=0.95,
+                    n_ctx=4096,
+                    n_threads=os.cpu_count(),  # Use all available CPU cores
+                    n_gpu_layers=0,
+                    callback_manager=callback_manager,
+                    verbose=True,  # Verbose is required to pass to the callback manager
                 )
-                llm = HuggingFacePipeline(pipline=pipe)
-                chat_model = ChatHuggingFace(llm=llm)
-                self.llm = chat_model.with_structured_output(Data_Objects)
-                self.llm_citation = chat_model
-                self.llm2 = chat_model
+                self.llm = LlamaCpp(
+                    model_path="./model_cache/models--NousResearch--Hermes-3-Llama-3.2-3B-GGUF/snapshots/3cd927095d8cbab12c743f932aa63b6f7bbfa141/Hermes-3-Llama-3.2-3B.Q4_K_M.gguf",
+                    temperature=0.5,
+                    max_tokens=512,
+                    top_p=0.95,
+                    n_ctx=4096,
+                    n_batch=512,
+                    n_threads=os.cpu_count(),  # Use all available CPU cores
+                    n_gpu_layers=0,
+                    callback_manager=callback_manager,
+                    verbose=True,  # Verbose is required to pass to the callback manager
+                    grammar_path='./filtered_output/gemini_scheme.gbnf'
+                )
+                self.llm_citation = llm
+                self.llm2 = llm
                 logger.info(f"LLM initialized with {hf_model}")
                 # Pydantic output parser
                 self.output_parser = PydanticOutputParser(pydantic_object=Data_Objects)
