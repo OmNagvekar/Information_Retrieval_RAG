@@ -301,18 +301,18 @@ class RAGChatAssistant:
                 raw_value = normalized_data.get(raw_key, "").strip()
                 cleaned_value = convert_na(raw_value)
                 
-                if field_name in ["endurance_cycles", "retention_time"]:
-                    cleaned_value = clean_numeric_value(raw_value)
-                    try:
-                        cleaned_value = int(float(cleaned_value)) if cleaned_value is not None else None
-                    except ValueError:
-                        pass
-                elif field_name in ["top_electrode_thickness", "bottom_electrode_thickness", "switching_layer_thickness", "memory_window"]:
-                    cleaned_value = clean_numeric_value(raw_value)
-                    try:
-                        cleaned_value = float(cleaned_value) if cleaned_value is not None else None
-                    except ValueError:
-                        pass
+                # if field_name in ["endurance_cycles", "retention_time"]:
+                #     cleaned_value = clean_numeric_value(raw_value)
+                #     try:
+                #         cleaned_value = int(float(cleaned_value)) if cleaned_value is not None else None
+                #     except ValueError:
+                #         pass
+                # elif field_name in ["top_electrode_thickness", "bottom_electrode_thickness", "switching_layer_thickness", "memory_window"]:
+                #     cleaned_value = clean_numeric_value(raw_value)
+                #     try:
+                #         cleaned_value = float(cleaned_value) if cleaned_value is not None else None
+                #     except ValueError:
+                #         pass
                 
                 cleaned[field_name] = cleaned_value
             return cleaned
@@ -581,7 +581,7 @@ class RAGChatAssistant:
         """Generate response with RAG and chat history"""
         # Retrieve context
         context_docs = self.retrieve_context(query)
-        context_docs = context_docs[0]
+        context_docs = context_docs[1]
         context_messages = [
                 SystemMessage(content=f"Source ID: {i}\nArticle ID: {doc.metadata['id']}\nArticle Title: {doc.metadata['title']}\nArticle Snippet: {doc.page_content}\nArticle Source: {doc.metadata['source']}\nmetadata: {doc.metadata}\n")
                 for i,doc in enumerate(context_docs)
