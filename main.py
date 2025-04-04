@@ -5,6 +5,7 @@ import os
 import time
 from datetime import datetime, timedelta
 import threading
+import gradio as gr
 
 TODAY_DATE = datetime.now().strftime("%Y-%m-%d")
 LOG_DIR='Logs'
@@ -84,44 +85,72 @@ def delete_old_logs():
             logging.error("Error in log cleanup: %s", e, exc_info=True)
 
         time.sleep(3600)  # Run every hour
+        
+        
+# Define the sample prompt (pre-populated default prompt)
+sample_prompt = """
+Please read the provided PDF thoroughly and extract the following quantities. Your output must be a table with two columns: "Quantity" and "Extracted Value". For each of the items listed below, provide the extracted value exactly as it appears in the document. If an item is not found, simply enter "N/A" for that field. Ensure that any numerical values include their associated units (if applicable) and that you handle multiple values consistently.
 
-if __name__=="__main__":
-    cleanup_thread = threading.Thread(target=delete_old_logs, daemon=True)
-    cleanup_thread.start()
-    obj = RAGChatAssistant(user_id="abc_123",remote_llm=True)
-    # obj.clear_chat_history()
-    result = obj.generate_response("""
-        Please read the provided PDF thoroughly and extract the following quantities. Your output must be a table with two columns: "Quantity" and "Extracted Value". For each of the items listed below, provide the extracted value exactly as it appears in the document. If an item is not found, simply enter "N/A" for that field. Ensure that any numerical values include their associated units (if applicable) and that you handle multiple values consistently.
+Extract the following items:
+- switching layer material
+- synthesis method
+- top electrode
+- thickness of top electrode in nanometers
+- bottom electrode
+- thickness of bottom electrode in nanometers
+- thickness of switching layer in nanometers
+- type of switching
+- endurance
+- retention time in seconds
+- memory window in volts
+- number of states
+- conduction mechanism type
+- resistive switching mechanism
+- paper name
+- source (pdf file name)
 
-        Extract the following items:
-        - switching layer material
-        - synthesis method
-        - top electrode
-        - thickness of top electrode in nanometers
-        - bottom electrode
-        - thickness of bottom electrode in nanometers
-        - thickness of switching layer in nanometers
-        - type of switching
-        - endurance
-        - retention time in seconds
-        - memory window in volts
-        - number of states
-        - conduction mechanism type
-        - resistive switching mechanism
-        - paper name
-        - source (pdf file name)
+Instructions:
+1. Analyze the entire PDF document to locate all references to the above items.
+2. Extract each quantity with precision; include any units and relevant details.
+3. If multiple values are present for a single item, list them clearly (e.g., separated by commas).
+4. Format your output strictly as a table with two columns: one for the "Quantity" and one for the "Extracted Value".
+5. Do not include any extra text, headings, or commentary—only the table is required.
+6. If an item cannot be found, record it as "N/A" in the "Extracted Value" column.
+"""
 
-        Instructions:
-        1. Analyze the entire PDF document to locate all references to the above items.
-        2. Extract each quantity with precision; include any units and relevant details.
-        3. If multiple values are present for a single item, list them clearly (e.g., separated by commas).
-        4. Format your output strictly as a table with two columns: one for the "Quantity" and one for the "Extracted Value".
-        5. Do not include any extra text, headings, or commentary—only the table is required.
-        6. If an item cannot be found, record it as "N/A" in the "Extracted Value" column.
+cleanup_thread = threading.Thread(target=delete_old_logs, daemon=True)
+cleanup_thread.start()
+assistant = RAGChatAssistant(user_id="abc_123",remote_llm=True)
 
-        """
-    )
-    # print("\nAssistant:", result['response'])
-    # print("\nContext:",result["context_docs"])
-    # print("\nValidated_output:",result["validated_output"])
-    print(result)
+def chat_with_assistant(query: str):
+    """
+    This function receives a user query, calls the generate_response method of the assistant,
+    and returns the structured response, non-structured response, and citations.
+    """
+    try:
+        result = assistant.generate_response(query)
+        # Extract the different parts from the returned dictionary.
+        structured_response = result.get("structured_response", "No structured response returned.")
+        non_structured_response = result.get("non_Structured_response", "No non-structured response returned.")
+        citations = result.get("citations", "No citations returned.")
+        return structured_response, non_structured_response, citations
+    except Exception as e:
+        logging.error("Error in chat_with_assistant: %s", e)
+        return "Error generating response.", "", ""
+
+# Create a Gradio Interface
+iface = gr.Interface(
+    fn=chat_with_assistant,
+    inputs=gr.Textbox(lines=15, placeholder="Enter your query here...", value=sample_prompt, label="User Query"),
+    outputs=[
+        gr.Textbox(label="Structured Response"),
+        gr.Markdown(label="Non-Structured Response"),
+        gr.Textbox(label="Citations")
+    ],
+    title="RAG Chat Assistant",
+    description="Enter a query and get responses generated by the RAG Chat Assistant. The sample prompt is pre-populated below.",
+    allow_flagging="never"
+)
+
+if __name__ == "__main__":
+    iface.launch(server_port=8080,debug=True)

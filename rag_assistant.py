@@ -41,7 +41,7 @@ REQUESTS = 2
 PERIOD = 60  # seconds
 
 class RAGChatAssistant:
-    def __init__(self,user_id:str,dirpath:str="./PDF/",remote_llm:bool=False,hf_model:str='NousResearch/Hermes-3-Llama-3.2-3B'):
+    def __init__(self,user_id:str,dirpath:str="./PDF/",remote_llm:bool=False,hf_model:str='Qwen/Qwen2.5-1.5B-Instruct'):
         logger.info("Initializing RAGChatAssistant")
         # path to uploaded/local pdf's
         self.dirpath = dirpath
