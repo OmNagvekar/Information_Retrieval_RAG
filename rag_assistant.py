@@ -20,7 +20,6 @@ import torch
 import json
 import logging
 import difflib
-from ChatHistory import ChatHistoryManager
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.retrievers import SelfQueryRetriever, MultiQueryRetriever, EnsembleRetriever
 from langchain.chains.query_constructor.base import AttributeInfo
@@ -36,8 +35,8 @@ cache_dir = "./model_cache"
 os.makedirs(cache_dir, exist_ok=True)
 
 logger = logging.getLogger(__name__)
-# Define rate limiter (2 requests per minute)
-REQUESTS = 2
+# Define rate limiter (5 requests per minute)
+REQUESTS = 5
 PERIOD = 60  # seconds
 
 class RAGChatAssistant:
@@ -48,8 +47,6 @@ class RAGChatAssistant:
         # device agnostic code
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         logger.info(f"Using device: {self.device}")
-        # chat History manager
-        self.chat_history_manager = ChatHistoryManager(user_id=user_id)
         #LLM
         self.remote_llm =remote_llm
         try:
@@ -389,8 +386,6 @@ class RAGChatAssistant:
                     logger.error(f"Error retrieving context for file {pdf}: {str(e)}")
         return doc
     
-    def clear_chat_history(self):
-        self.chat_history_manager.clear_history()
     
     def retrieve_best_example(self, query: str, examples: List[Any]) -> List[Any]:
         """
@@ -576,7 +571,7 @@ class RAGChatAssistant:
 
     @sleep_and_retry
     @limits(calls=REQUESTS, period=PERIOD)
-    def generate_response(self, query:str):
+    def generate_response(self, query:str,Chat_history):
         logger.info(f"Generating response")
         """Generate response with RAG and chat history"""
         # Retrieve context
@@ -597,7 +592,7 @@ class RAGChatAssistant:
             chain = prompt_template | self.llm
             if self.remote_llm:
                 non_structured_response = non_structured_chain.invoke({
-                    "history": self.chat_history_manager.get_message_history(limit=2),
+                    "history": Chat_history,
                     "context":context_messages,
                     "query": query
                 })
@@ -615,13 +610,10 @@ class RAGChatAssistant:
                     citations_response = self.extract_citations(context_messages)
                     logger.info("Used Structured LLM on non_structured_response")
 
-                import pathlib
-                pathlib.Path("./filtered_output/context" + ".txt").write_bytes(str(context_messages).encode())
-                pathlib.Path("./filtered_output/sample_response" + ".json").write_bytes(structured_response.encode())
-                pathlib.Path("./filtered_output/citation_response" + ".json").write_bytes(citations_response.encode())
-                self.chat_history_manager.add_user_message(query)
-                self.chat_history_manager.add_ai_message(structured_response)
-                self.chat_history_manager.save_history()
+                # import pathlib
+                # pathlib.Path("./filtered_output/context" + ".txt").write_bytes(str(context_messages).encode())
+                # pathlib.Path("./filtered_output/sample_response" + ".json").write_bytes(structured_response.encode())
+                # pathlib.Path("./filtered_output/citation_response" + ".json").write_bytes(citations_response.encode())
 
                 return {
                     "structured_response":structured_response,
@@ -633,7 +625,7 @@ class RAGChatAssistant:
                 
                 try:
                     structured_response = chain.invoke({
-                        "history": self.chat_history_manager.get_message_history(limit=2),
+                        "history": Chat_history,
                         "examples": best_example,
                         "context":context_messages,
                         "query": query
@@ -644,7 +636,7 @@ class RAGChatAssistant:
                 except Exception as e:
                     logger.error("Exception occurred in Parsing: %s", str(e))
                     non_structured_response = non_structured_chain.invoke({
-                        "history": self.chat_history_manager.get_message_history(limit=2),
+                        "history": Chat_history,
                         "examples": best_example,
                         "context":context_messages,
                         "query": query
@@ -659,9 +651,6 @@ class RAGChatAssistant:
                 pathlib.Path("./filtered_output/context" + ".txt").write_bytes(str(context_messages).encode())
                 pathlib.Path("./filtered_output/sample_response" + ".json").write_bytes(structured_response.encode())
                 pathlib.Path("./filtered_output/citation_response" + ".json").write_bytes(citations_response.encode())
-                self.chat_history_manager.add_user_message(query)
-                self.chat_history_manager.add_ai_message(structured_response)
-                self.chat_history_manager.save_history()
                 return {
                     "structured_response":structured_response,
                     "non_Structured_response":non_structured_response.content,
