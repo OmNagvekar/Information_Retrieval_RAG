@@ -89,10 +89,11 @@ cleanup_thread = threading.Thread(target=delete_old_logs, daemon=True)
 cleanup_thread.start()
 # Define your pages
 login_page = st.Page("login.py", title="Login")
-feature_selection = st.Page("main.py", title="Select Feature")
+feature_selection = st.Page("feature_selection.py", title="Feature Selection")
+structured_output = st.Page("structured_output.py", title="structured output")
 
 # Set up navigation
-pg = st.navigation([login_page, feature_selection])
+pg = st.navigation([login_page, feature_selection,structured_output])
 # Initialize session state variables if they don't exist
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -100,6 +101,14 @@ if "user_id" not in st.session_state:
     st.session_state.user_id =None
 if "chat_id" not in st.session_state:
     st.session_state.chat_id = []
+if "title" not in st.session_state:
+    st.session_state.title =[]
+if "picture" not in st.session_state:
+    st.session_state.picture = None
+if "email" not in st.session_state:
+    st.session_state.email = None
+if "username" not in st.session_state:
+    st.session_state.username = None
 
 # Run the selected page
 pg.run()

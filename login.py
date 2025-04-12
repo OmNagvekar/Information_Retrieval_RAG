@@ -62,10 +62,14 @@ if mode == "Login":
         if user_record:
             profile_username = user_record.get("username", oauth_email)
             profile_email = user_record.get("email", oauth_email)
+            st.session_state.username= profile_username
+            st.session_state.email = profile_email
             logger.info("Loaded user record from DB for oidc_user_id: %s", oidc_user_id)
         else:
             profile_username = oauth_email
             profile_email = oauth_email
+            st.session_state.username= profile_username
+            st.session_state.email = profile_email
             logger.info("No user record found in DB for oidc_user_id: %s", oidc_user_id)
     
         if oauth_picture:
@@ -73,6 +77,7 @@ if mode == "Login":
             if response.status_code == 200:
                 image = Image.open(BytesIO(response.content))
                 st.image(image, width=100,caption="Profile Picture")
+                st.session_state.picture = image
             else:
                 st.image(oauth_picture, width=100,caption="Profile Picture")
         else:
@@ -99,17 +104,18 @@ if mode == "Login":
         for chat in chat_history:
             st.write(f"### ID: {chat['chat_id']}")
             st.session_state.chat_id.append(chat["chat_id"])
+            st.session_state.title.append(chat["title"])
         update_chat_ids(oidc_user_id, st.session_state.chat_id)
         logger.info("Updated chat IDs for user %s: %s", oidc_user_id, st.session_state.chat_id)
     else:
         st.info("You have no chat IDs yet.")
     
-    if st.button("Proceed to Chat History"):
-        st.success("Navigating to Chat History...")  # Placeholder for future navigation.
+    if st.button("Proceed to selecting feature"):
+        st.success("Navigating to selecting feature...")  # Placeholder for future navigation.
         st.session_state.logged_in = True
         st.session_state.user_id = oidc_user_id
-        st.switch_page("main.py")
-        logger.info("User %s proceeding to Chat History.", oidc_user_id)
+        st.switch_page("feature_selection.py")
+        logger.info("User %s proceeding to feature selection.", oidc_user_id)
 
 
 # --- SIGN UP TAB ---
