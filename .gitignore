@@ -8,3 +8,5 @@ filtered_output/
 Logs/
 /gemini_key.txt
 model_cache/
+.streamlit/
+.env

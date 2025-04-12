@@ -1,42 +1,63 @@
-import json
 import os
 import logging
 from datetime import datetime
 from uuid import uuid4
 from typing import List, Dict, Any
 from langchain_core.messages import HumanMessage, AIMessage
-
+from pymongo import MongoClient
+from dotenv import find_dotenv,load_dotenv
 logger = logging.getLogger(__name__)
+# Loading enviroment variables
+load_dotenv(find_dotenv())
 
 class ChatHistoryManager:
-    def __init__(self, user_id: str, base_dir: str = 'chat_histories'):
+    def __init__(self, user_id: str):
         """
         Initialize ChatHistoryManager for a specific user with support for multiple chats.
-
+        Chat histories are stored in a MongoDB collection. The structure of the document is:
+        {
+            "user_id": <user_id>,
+            "chats": {
+                chat_id1: {
+                    "title": <title>,
+                    "timestamp": <creation timestamp>,
+                    "history": [ { message dict }, ... ]
+                },
+                chat_id2: { ... }
+            }
+        }
+        
         :param user_id: Unique identifier for the user.
-        :param base_dir: Directory to store the chat history file.
         """
         self.user_id = user_id
-        self.base_dir = base_dir
-        # This will store all chats for the current user.
-        self.chats: Dict[str, Dict[str, Any]] = {}
-        # Active chat id for the current session.
+        self.mongo_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017/")
+        self.db_name = os.getenv("DATABASE_NAME", "IRAG")
+        self.collection_name = os.getenv("CHAT_HISTORY_COLLECTION_NAME", "chat_history")
         self.current_chat_id: str = None
-        
+        self.chats: Dict[str, Dict[str, Any]] = {}
+
         logger.info("Initializing ChatHistoryManager for user %s", user_id)
-        
-        os.makedirs(base_dir, exist_ok=True)
-        logger.info("Base directory '%s' ensured for chat histories.", base_dir)
+        self.client = MongoClient(self.mongo_uri)
+        self.db = self.client[self.db_name]
+        self.collection = self.db[self.collection_name]
+
         self._load_history()
 
-    def _get_history_file_path(self) -> str:
+    def init_db(self):
         """
-        Generate the file path for the chat history.
-        :return: Full path to the chat history JSON file.
+        Initialize the MongoDB database by creating unique indexes on
+        (But only Run one time when intializing the database):
+        - oidc_user_id (unique identifier from your OAuth provider)
+        - username (unique user-chosen username)
         """
-        path = os.path.join(self.base_dir, "chathistory.json")
-        logger.debug("Chat history file path: %s", path)
-        return path
+        try:
+            # Create a unique index for 'oidc_user_id'
+            self.collection.create_index([("user_id")], unique=True)
+            # Create a unique index for 'username'
+            self.collection.create_index([("chat_id")], unique=True)
+            logger.info("Database initialized with unique indexes.")
+        except Exception as e:
+            logger.error("Error initializing database indexes: %s", e)
 
     def create_new_chat(self, title: str = "New Chat") -> str:
         """
@@ -109,20 +130,20 @@ class ChatHistoryManager:
         })
         if save_hist:
             self._save_history()
-    
+
     def add_citation_message(self, message: str, save_hist: bool = False):
         """
-        Add an Citation message to the active chat session.
+        Add a citation message to the active chat session.
         
-        :param message: AI's message content.
+        :param message: Citation message content.
         :param save_hist: Whether to immediately save the history.
         """
         if not self.current_chat_id:
             logger.error("No active chat session. Create or load a chat first.")
             raise ValueError("No active chat session. Create or load a chat first.")
-        logger.info("Adding Citation message to chat %s.", self.current_chat_id)
+        logger.info("Adding citation message to chat %s.", self.current_chat_id)
         self.chats[self.current_chat_id]["history"].append({
-            "role": "ai",
+            "role": "citation",
             "content": message,
             "timestamp": datetime.now().isoformat()
         })
@@ -132,6 +153,7 @@ class ChatHistoryManager:
     def get_message_history(self, limit: int = None) -> List[Any]:
         """
         Retrieve message history (converted to LangChain message objects) from the active chat.
+        Only messages with role 'human' or 'ai' are returned.
         
         :param limit: Optional limit on the number of messages to return.
         :return: List of message objects.
@@ -144,7 +166,9 @@ class ChatHistoryManager:
             if not history:
                 logger.info("No messages in the active chat session.")
                 return []
-            history_to_convert = history[-limit:] if limit else history
+            # Filter only messages with role 'human' or 'ai'
+            valid_history = [msg for msg in history if msg["role"] in ("human", "ai")]
+            history_to_convert = valid_history[-limit:] if limit else valid_history
             logger.info("Retrieving message history from chat %s with limit %s", self.current_chat_id, limit)
             return [
                 HumanMessage(content=msg['content']) if msg['role'] == 'human'
@@ -153,6 +177,46 @@ class ChatHistoryManager:
             ]
         except Exception as e:
             logger.error("Error retrieving message history: %s", e, exc_info=True)
+            return []
+
+    def get_citation_message(self, limit: int = 1) -> List[Any]:
+        """
+        Retrieve citation message(s) (converted to AIMessage objects) from the active chat.
+        
+        If limit == 1, the method searches backwards through the complete history until
+        the first message with role 'citation' is found and returns it. If no citation message is found,
+        an empty list is returned.
+        
+        For limit > 1, the last 'limit' citation messages are returned.
+        
+        :param limit: Number of citation messages to return.
+        :return: List of citation message objects.
+        """
+        try:
+            if not self.current_chat_id:
+                logger.error("No active chat session. Create or load a chat first.")
+                return []
+            history = self.chats[self.current_chat_id].get("history", [])
+            if not history:
+                logger.info("No messages in the active chat session.")
+                return []
+            # For limit == 1, search backwards until the first citation message is found
+            if limit == 1:
+                for msg in reversed(history):
+                    if msg.get("role") == "citation":
+                        logger.info("Citation message found in chat %s", self.current_chat_id)
+                        return [AIMessage(content=msg["content"])]
+                logger.info("No citation message found in chat %s", self.current_chat_id)
+                return []
+            else:
+                # For limit > 1, filter all citation messages and return the last 'limit' citations
+                citation_msgs = [msg for msg in history if msg.get("role") == "citation"]
+                if not citation_msgs:
+                    logger.info("No citation messages found in chat %s", self.current_chat_id)
+                    return []
+                return [AIMessage(content=msg["content"]) for msg in citation_msgs[-limit:]]
+        except Exception as e:
+            logger.error("Error retrieving citation message: %s", e, exc_info=True)
             return []
 
     def clear_history(self):
@@ -168,80 +232,54 @@ class ChatHistoryManager:
 
     def _load_history(self):
         """
-        Load chat history from the JSON file.
+        Load chat history for the user from MongoDB.
         """
-        file_path = self._get_history_file_path()
-        logger.info("Loading chat history from %s", file_path)
-        if os.path.exists(file_path):
-            try:
-                with open(file_path, 'r') as f:
-                    data = json.load(f)
-                    # Expecting a structure: { user_id: { chat_id: { ... } } }
-                    self.chats = data.get(self.user_id, {})
-                    logger.info("Loaded %d chats for user %s", len(self.chats), self.user_id)
-            except Exception as e:
-                logger.error("Failed to load chat history from %s: %s", file_path, e, exc_info=True)
-                self.chats = {}
+        logger.info("Loading chat history for user %s from MongoDB", self.user_id)
+        doc = self.collection.find_one({"user_id": self.user_id})
+        if doc:
+            self.chats = doc.get("chats", {})
+            logger.info("Loaded %d chats for user %s", len(self.chats), self.user_id)
         else:
             self.chats = {}
-            self._save_history()
+            self._save_history()  # Create a new document for this user
 
     def _save_history(self):
         """
-        Save the current chats (for all users) to the JSON file.
+        Save the current chats (for the user) to MongoDB.
         """
-        file_path = self._get_history_file_path()
-        try:
-            # Read any existing data to avoid overwriting other users' histories
-            data = {}
-            if os.path.exists(file_path):
-                with open(file_path, 'r') as f:
-                    data = json.load(f)
-            data[self.user_id] = self.chats
-            with open(file_path, 'w') as f:
-                json.dump(data, f, indent=4)
-            logger.info("Chat history saved to %s", file_path)
-        except Exception as e:
-            logger.error("Failed to save chat history to %s: %s", file_path, e, exc_info=True)
+        logger.info("Saving chat history for user %s to MongoDB", self.user_id)
+        self.collection.update_one(
+            {"user_id": self.user_id},
+            {"$set": {"chats": self.chats}},
+            upsert=True
+        )
+        logger.info("Chat history saved to MongoDB.")
 
-    def export_history(self, export_path: str = None):
+    def export_history(self) -> Dict[str, Any]:
         """
-        Export the current user's chat history to a specified file.
+        Export the current user's chat history.
         
-        :param export_path: If None, uses a default filename with a timestamp.
-        :return: The path to the exported file.
+        :return: The user's chat history data.
         """
         logger.info("Exporting chat history for user %s", self.user_id)
-        if export_path is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            export_path = os.path.join(self.base_dir, f"{self.user_id}_chat_history_export_{timestamp}.json")
-        with open(export_path, 'w') as f:
-            json.dump({self.user_id: self.chats}, f, indent=4)
-        logger.info("Chat history exported to %s", export_path)
-        return export_path
+        return {"user_id": self.user_id, "chats": self.chats}
 
     @classmethod
-    def list_user_histories(cls, base_dir: str = 'chat_histories') -> List[str]:
+    def list_user_histories(cls) -> List[str]:
         """
-        List all user IDs that have chat histories in the JSON file.
+        List all user IDs that have chat histories in MongoDB.
         
-        :param base_dir: Directory containing the chat history file.
         :return: List of user IDs.
         """
-        file_path = os.path.join(base_dir, "chathistory.json")
-        logger.info("Listing all user chat histories in file: %s", file_path)
-        if not os.path.exists(file_path):
-            os.makedirs(base_dir, exist_ok=True)
-            return []
-        try:
-            with open(file_path, 'r') as f:
-                data = json.load(f)
-            user_ids = list(data.keys())
-            logger.info("Found %d user chat histories.", len(user_ids))
-            return user_ids
-        except Exception as e:
-            logger.error("An error occurred while listing user histories: %s", e, exc_info=True)
-            return []
+        mongo_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017/")
+        db_name = os.getenv("DATABASE_NAME", "IRAG")
+        collection_name = os.getenv("CHAT_HISTORY_COLLECTION_NAME", "chat_history")
+        client = MongoClient(mongo_uri)
+        db = client[db_name]
+        collection = db[collection_name]
+        user_ids = collection.distinct("user_id")
+        logger.info("Found %d user chat histories.", len(user_ids))
+        return user_ids
 
     def get_history_size(self) -> int:
         """
@@ -253,32 +291,35 @@ class ChatHistoryManager:
         logger.info("Chat history size for chat %s of user %s: %d", self.current_chat_id, self.user_id, size)
         return size
 
-    # Additional helper methods (like search, backup, restore, etc.) can be adapted similarly.
-
 # Example usage:
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
-    user_id = "user_1234"
-    manager = ChatHistoryManager(user_id)
+    user_id = "104363079999574289592"
+    manager = ChatHistoryManager(user_id)    
     # Create a new chat session
     new_chat_id = manager.create_new_chat("My First Chat 2")
-    
-    manager.add_user_message("Hello, how are you?", save_hist=True)
+    print("chat_id ",new_chat_id,"\n=================\n")
+    manager.add_citation_message("Citation: Reference XYZ")
+    manager.add_user_message("Hello, how are you?")
     manager.add_ai_message("I'm doing great, thank you!", save_hist=True)
     
-    manager.add_user_message("Hello, how are you? 2", save_hist=True)
-    manager.add_ai_message("I'm doing great, thank you! 2", save_hist=True)
-    # Load the chat session by id and retrieve history
     
+    manager.add_citation_message("Citation: Reference ABC ==============2")
+    manager.add_user_message("Hello, how are you =====2?")
+    manager.add_ai_message("I'm doing great, thank you! =========2", save_hist=True)
+    
+    # # Load the chat session by id and retrieve history
     loaded_chat = manager.load_chat(new_chat_id)
+    print("Title:", loaded_chat['title'],"\n============================\n")
+    print("Loaded Chat:", loaded_chat,"\n================================\n")
     
-    print("Title:",loaded_chat['title'])
-    print("Loaded Chat:", loaded_chat)
     message_history = manager.get_message_history()
     for msg in message_history:
-        print(msg)
+        print(msg,"\n#=======================#\n")
+    
+    citation_message = manager.get_citation_message(limit=1)
+    print("Citation Message:", citation_message,"\n==============================\n")
         
-    print(manager.get_history_size(),"\n")
-    print(manager.list_user_histories(),"\n")
-    print(manager.export_history(),"\n")
-    print(manager.get_message_history(limit=2),"\n")
+    print("History size:", manager.get_history_size(),"\n===========================\n")
+    print("User IDs with histories:", ChatHistoryManager.list_user_histories(),"\n=======================\n")
+    print("Exported History:", manager.export_history(),"\n===========================\n")
+    print("Last 2 messages:", manager.get_message_history(limit=2),"\n===================\n")

@@ -29,6 +29,10 @@ import re
 from typing import Optional
 from kor.extraction import create_extraction_chain
 from kor import from_pydantic
+from dotenv import load_dotenv,find_dotenv
+
+# Loading enviroment variables
+load_dotenv(find_dotenv())
 
 # Define your cache directory and ensure it exists
 cache_dir = "./model_cache"
@@ -41,6 +45,15 @@ PERIOD = 60  # seconds
 
 class RAGChatAssistant:
     def __init__(self,user_id:str,dirpath:str="./PDF/",remote_llm:bool=False,hf_model:str='Qwen/Qwen2.5-1.5B-Instruct'):
+        """
+        Initializes the RAGChatAssistant.
+
+        Args:
+            user_id (str): user id associated with the chat history
+            dirpath (str): path to the directory containing the PDF files
+            remote_llm (bool): whether to use a remote LLM (Gemini) or a local one (HuggingFace)
+            hf_model (str): name of the HuggingFace model to use if remote_llm is False
+        """
         logger.info("Initializing RAGChatAssistant")
         # path to uploaded/local pdf's
         self.dirpath = dirpath
@@ -51,8 +64,7 @@ class RAGChatAssistant:
         self.remote_llm =remote_llm
         try:
             if remote_llm:
-                with open("gemini_key.txt",'r') as f:
-                    key = f.read()
+                key = os.getenv('GEMINI_API_KEY')
                 llm = ChatGoogleGenerativeAI(model='gemini-1.5-flash',max_retries=2,google_api_key=key,disable_streaming=False,convert_system_message_to_human=True,temperature=0.5,cache=False)
                 self.llm = llm.with_structured_output(Data_Objects)
                 self.llm_citation = llm #llm.with_structured_output(Citations)
@@ -232,6 +244,18 @@ class RAGChatAssistant:
         return vectore_store
     
     def preprocess_text(self,text:str) ->dict:
+        """
+        Converts a markdown table to a dictionary and maps the keys to the
+        appropriate Pydantic model field names.
+
+        Args:
+            text (str): The markdown table string
+
+        Returns:
+            dict: A dictionary containing the extracted data mapped to the correct
+            Pydantic model field names. If a value cannot be determined for a field
+            (e.g. a key is not present), the value will be None.
+        """
         def markdown_table_to_dict(table_str: str) -> dict:
             """
             Converts a markdown table to a dictionary.
