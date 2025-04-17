@@ -89,7 +89,7 @@ class Extract_Data(BaseModel):
         )
     )
     paper_name: Optional[str] = Field(default=None, description="The title or name of the research paper from which the data is extracted.")
-    source: Optional[str] =Field(default=None,drescription=(
+    source: Optional[str] =Field(default=None,description=(
             "The filename of the PDF document from which the data was extracted. Examples might include 'Memory_characteristic.pdf' "
             "or simply '1.pdf'."
         )
@@ -121,4 +121,5 @@ if __name__=="__main__":
     temp ={'switching_layer_material': 'CuxO', 'synthesis_method': 'solution-processed', 'top_electrode': 'Au', 'top_electrode_thickness': None, 'bottom_electrode': 'ITO', 'bottom_electrode_thickness': None, 'switching_layer_thickness': None, 'switching_type': None, 'endurance_cycles': 200, 'retention_time': 104, 'memory_window': None, 'num_states': None, 'conduction_mechanism': 'mixed ionic electronic conduction (MIEC)', 'resistive_switching_mechanism': 'formation of Cu filaments', 'paper_name': 'Resistive Switching Characteristics in Solution-Processed Copper Oxide (CuxO) by Stoichiometry Tuning', 'source': '10.pdf'}
     print(Data_Objects(data=[Extract_Data(**temp)]).to_json_string())
     print("\n\n-----------------------------")
+    # print(Data_Objects.model_json_schema())
     print(Data_Objects.model_json_schema())
