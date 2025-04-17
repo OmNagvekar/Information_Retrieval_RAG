@@ -29,7 +29,7 @@ def chat_with_assistant(query: str,manager: ChatHistoryManager,assistant: RAGCha
             return "Error generating response.", "", ""
         
 def generate_response(manager: ChatHistoryManager,assistant: RAGChatAssistant):
-    with st.spinner("Generating response..."):
+    with st.spinner("Generating response...",show_time=True):
         structured_response, non_structured_response, citations = chat_with_assistant(st.session_state.prompt, manager,assistant)
 
     st.subheader("Structured Response (JSON)")

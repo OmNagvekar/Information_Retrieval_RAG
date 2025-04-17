@@ -307,7 +307,7 @@ if st.session_state.logged_in:
                 st.switch_page("structured_output.py")
             
             if st.button("Delete this Schema"):
-                delete_pydantic_model(st.session_state.user_id, selected_schema)
+                delete_pydantic_model(st.session_state.user_id, gen_field_titles(selected_schema.model_json_schema()))
                 st.session_state.pydantic_schema = get_pydantic_models(st.session_state.user_id)
                 st.rerun()
         else:
@@ -369,7 +369,7 @@ if st.session_state.logged_in:
             new_model = DynamicGenSchema.create_model(result_dict)
             st.session_state.pydantic_schema.append(new_model)
             st.session_state.current_schema = new_model
-            update_pydantic_models(st.session_state.user_id, st.session_state.pydantic_schema)
+            update_pydantic_models(st.session_state.user_id, [ gen_field_titles(model.model_json_schema()) for model in st.session_state.pydantic_schema])
             
             logger.info("Updated pydantic models for user %s: %s", st.session_state.user_id, st.session_state.pydantic_schema)
             st.write("**Final Dictionary:**")
@@ -382,7 +382,15 @@ if st.session_state.logged_in:
             
             # Optionally, navigate to another page
             time.sleep(2)
-            # st.switch_page("structured_output.py")
+            st.switch_page("structured_output.py")
 else:
     st.warning("Please log in to access this page.")
+    st.session_state.logged_in = False
+    st.session_state.user_id = None
+    st.session_state.chat_id = []
+    st.session_state.title = []
+    st.session_state.current_schema =None
+    st.session_state.pydantic_schema =None
+    
+    st.session_state.current_chat_id = ""
     st.switch_page("login.py")
