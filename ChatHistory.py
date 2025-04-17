@@ -54,7 +54,7 @@ class ChatHistoryManager:
             # Create a unique index for 'oidc_user_id'
             self.collection.create_index([("user_id")], unique=True)
             # Create a unique index for 'username'
-            self.collection.create_index([("chat_id")], unique=True)
+            self.collection.create_index([("chats")], unique=True)
             logger.info("Database initialized with unique indexes.")
         except Exception as e:
             logger.error("Error initializing database indexes: %s", e)

@@ -1,7 +1,6 @@
 import streamlit as st
 from utils import profile_page_loader
 import logging
-
 logger = logging.getLogger(__name__)
 
 # Load the user's profile page (navigation, authentication, etc.)
@@ -92,7 +91,7 @@ st.markdown(
 
 
 if st.button("Structured Output Feature"):
-    st.switch_page("structured_output.py")
+    st.switch_page("form.py")
     
 # ------------------------------------------------------------------------------
 st.markdown("---")

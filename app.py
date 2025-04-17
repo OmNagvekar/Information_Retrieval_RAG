@@ -90,10 +90,13 @@ cleanup_thread.start()
 # Define your pages
 login_page = st.Page("login.py", title="Login")
 feature_selection = st.Page("feature_selection.py", title="Feature Selection")
+form = st.Page("form.py", title="Schema Form")
 structured_output = st.Page("structured_output.py", title="structured output")
 
+
+
 # Set up navigation
-pg = st.navigation([login_page, feature_selection,structured_output])
+pg = st.navigation([login_page, feature_selection,form,structured_output])
 # Initialize session state variables if they don't exist
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -109,6 +112,9 @@ if "email" not in st.session_state:
     st.session_state.email = None
 if "username" not in st.session_state:
     st.session_state.username = None
+
+if 'global_variable' not in st.session_state:
+    st.session_state.global_variable = []
 
 # Run the selected page
 pg.run()

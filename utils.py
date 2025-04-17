@@ -1,9 +1,10 @@
 import bcrypt
-from db import get_user,get_chat_titles_and_ids
+from db import get_user,get_chat_titles_and_ids,delete_chat_id,delete_chat_session
 import requests
 from io import BytesIO
 from PIL import Image
 import streamlit as st
+from uuid import uuid4
 
 def hash_password(password: str) -> str:
     salt = bcrypt.gensalt()
@@ -14,7 +15,7 @@ def check_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
 # Define the sample prompt (pre-populated default prompt)
-def profile_page_loader(logger):
+def profile_page_loader(logger,on_chat_page=False):
     """
     This function is the entry point for the Streamlit app. It loads the user profile information from the database and displays it in the sidebar. It also handles the chat history and displays the chat titles in the sidebar. The main part of the page is dedicated to the chat interface, where the user can input a query and receive a response from the RAG Chat Assistant.
 
@@ -54,13 +55,28 @@ def profile_page_loader(logger):
                 st.session_state.logged_in = False
                 st.logout()
                 st.rerun()
+            
         
             st.markdown("## Chat Titles")
             if chat_history:
+                count =0
                 for chat in chat_history:
-                    st.markdown(f"- **{chat['title']}** (Chat ID: **{chat['chat_id']})**")
+                    with st.popover(f"### Title: {chat['title']}\n ID: {chat['chat_id']}"):
+                        if st.button("Delete this Chat",key=str(uuid4())):
+                            delete_chat_id(st.session_state.user_id,chat["chat_id"])
+                            delete_chat_session(st.session_state.user_id,chat["chat_id"])
+                            st.session_state.chat_id.remove(chat["chat_id"])
+                            st.session_state.title.remove(chat["title"])
+                            st.rerun()
+                        if on_chat_page:
+                            if st.button("Continue this Chat",key=str(uuid4())):
+                                st.session_state.current_chat_id = chat["chat_id"]
+                                st.rerun()
+                    count+=1
             else:
                 st.info("No chat titles available.")
+            if st.button("Refresh Chat History"):
+                st.rerun()
     else:
         st.info("Please log in to proceed.")
         st.switch_page("login.py")

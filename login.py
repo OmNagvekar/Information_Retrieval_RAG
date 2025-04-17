@@ -4,7 +4,8 @@ import logging
 from PIL import Image
 import requests
 from io import BytesIO
-from db import get_user, create_user, users_collection, get_chat_titles_and_ids,update_chat_ids
+from uuid import uuid4
+from db import get_user, create_user, users_collection, get_chat_titles_and_ids,update_chat_ids,delete_chat_id,delete_chat_session
 # from utils import hash_password
 
 # Configure logging
@@ -94,22 +95,20 @@ if mode == "Login":
         st.markdown("## Chat Titles")
         if chat_history:
             for chat in chat_history:
-                st.markdown(f"- **{chat['title']} (Chat ID: **{chat['chat_id']})**")
+                st.session_state.chat_id.append(chat["chat_id"])
+                st.session_state.title.append(chat["title"])
+                with st.popover(f"### Title: {chat['title']}\n ID: {chat['chat_id']}"):
+                    
+                    if st.button("Delete this Chat",key=str(uuid4())):
+                        delete_chat_id(oidc_user_id,chat["chat_id"])
+                        delete_chat_session(oidc_user_id,chat["chat_id"])
+                        st.session_state.chat_id.remove(chat["chat_id"])
+                        st.session_state.title.remove(chat["title"])
+                        st.rerun()
         else:
             st.info("No chat titles available.")
     
     st.subheader("Login - Welcome Back!")
-    st.write("Your chat IDs:")
-    if chat_history:
-        for chat in chat_history:
-            st.write(f"### ID: {chat['chat_id']}")
-            st.session_state.chat_id.append(chat["chat_id"])
-            st.session_state.title.append(chat["title"])
-        update_chat_ids(oidc_user_id, st.session_state.chat_id)
-        logger.info("Updated chat IDs for user %s: %s", oidc_user_id, st.session_state.chat_id)
-    else:
-        st.info("You have no chat IDs yet.")
-    
     if st.button("Proceed to selecting feature"):
         st.success("Navigating to selecting feature...")  # Placeholder for future navigation.
         st.session_state.logged_in = True
