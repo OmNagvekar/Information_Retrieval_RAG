@@ -113,8 +113,5 @@ if "email" not in st.session_state:
 if "username" not in st.session_state:
     st.session_state.username = None
 
-if 'global_variable' not in st.session_state:
-    st.session_state.global_variable = []
-
 # Run the selected page
 pg.run()

@@ -1,24 +1,59 @@
 # Information Retrieval RAG For Data Extraction from Research Papers
 
-This project is a **Retrieval-Augmented Generation (RAG)** system designed to extract scientific and technical information from research papers. The system is built to handle large-scale document processing, embedding-based retrieval, and context-aware responses, leveraging **LangChain**, **ChromaDB**, and **LLMs** for robust data extraction and conversational AI.The system supports **Gemini API** and **Ollama** for LLM.
+This project is a **Retrieval-Augmented Generation (RAG)** system designed to extract scientific and technical information from research papers. The system is built to handle large-scale document processing, embedding-based retrieval, and context-aware responses, leveraging. The system features a hybrid retrieval pipeline, dynamic schema extraction, citation linking, multi-user chat history, and a modern Streamlit interface.
+
+- Advanced **hybrid retrieval** (multi-query, self-query, ensemble, contextual compression)
+- **Dynamic schema extraction** using runtime Pydantic model generation
+- **Citation mapping** for transparent source linking
+- **MongoDB-backed** user and chat management
+- Full **Streamlit app** for user authentication, chat, and data extraction workflows
+
+---
+
+## Workflow Overview
+
+![image](IRAG_Flowchart.png)
+
+### Step-by-step Pipeline:
+1. **PDF Upload**: Bulk import of research papers.
+2. **Content Filtering**: Removes non-essential sections (references, intro).
+3. **Chunking & Metadata**: Splits and annotates text for retrieval.
+4. **Embedding**: Uses HuggingFace transformer models for dense text representation.
+5. **ChromaDB Vector Store**: Fast, persistent semantic search.
+6. **Schema Input**: User defines fields to extract (UI form → dynamic Pydantic schema).
+7. **Prompt Generation**: Automated, field-mapped prompt for extraction.
+8. **Hybrid Retrieval**: Multi-query, self-query, ensemble, and contextual compression for robust context.
+9. **LLM Extraction**: Uses Gemini, Ollama, or HuggingFace models for structured output.
+10. **Citation Linking**: Maps extracted data to source documents.
+11. **Display**: Structured and citation-linked output in UI; all chat history saved.
 
 ---
 
 ## Directory Structure
 
 ```plaintext
-omnagvekar-information_retrieval_rag/
-├── document_loader.py     # Handles document loading and parsing from PDFs
-├── general_schema.py      # Defines data schemas for extracted information
-├── rag_assistant.py       # Core RAG Assistant
-├── main.py                # Execution script
-├── scheme.py              # ontains Pydantic models for data validation and Defines data schemas for extracted information
-├── textsplitter.py        # Processes and embeds text chunks for vector storage
-├── ChatHistory.py         # Contains code to manage history
-├── gemini_scheme.py       # New schema for Gemini API integration
-├── citation.py            # Handles structured citation extraction and formatting
-├── gemini_key.txt         # Stores API key for Gemini LLM (Looking for API KEY Not available in Repo as it is API KEY 😊)
-├── LICENSE                # Added LICENSE File
+Information_Retrieval_RAG/
+├── app.py                 # Streamlit UI—navigation, login, schema form, output
+├── db.py                  # MongoDB: users, chat history, dynamic schema CRUD
+├── dynamic_schema.py      # Runtime Pydantic model generation, schema prompts
+├── ChatHistory.py         # Multi-chat history (MongoDB), analytics, export/import
+├── document_loader.py     # PDF parsing (text, OCR, metadata extraction)
+├── rag_assistant.py       # Core RAG pipeline: hybrid retrieval, extraction, citation
+├── textsplitter.py        # Chunking, embedding (HuggingFace), ChromaDB store
+├── scheme.py              # contains Pydantic models for data validation and Defines data schemas for extracted information (legacy)
+├── gemini_scheme.py       # Gemini API schemas
+├── citation.py            # Citation models (transparent, source-linked)
+├── general_schema.py      # General extraction schemas
+├── requirements.txt       # Dependencies
+├── LICENSE                # License
+├── README.md              # Documentation
+├── feature_selection.py   # Streamlit: choose chat/structured/agenticRAG features
+├── form.py                # Streamlit: dynamic schema definition form
+├── structured_output.py   # Streamlit: RAG chat, output, chat creation
+├── login.py               # Streamlit: OAuth login/profile
+├── utils.py               # Utility functions (profile, hashing, etc.)
+├── .env                   # Enviroment Variable
+└── Logs/                  # Log files (auto-managed, periodic cleanup)
 ```
 
 ---
@@ -41,43 +76,80 @@ omnagvekar-information_retrieval_rag/
    - **Search Modes**: Supports Maximum Marginal Relevance (MMR) and similarity-based retrieval.
    - **Local Storage**: Local Storage: Saves and loads ChromaDB indices for persistent retrieval capabilities..
 
-### 4. **RAG Pipeline**
-   - **LLM Integration**: Leverages LangChain's `ChatOllama` and also supports `Gemini API LLM ` for structured query responses.
-   - **Prompt Engineering**: Constructs custom prompts with examples, ensuring high accuracy in responses for `ChatOllama` Instance LLM.
-   - **Schema Validation**: Ensures extracted data adheres to well-defined Pydantic models, reducing inconsistencies.
-   - **Context Retrieval**: Implements Self-Query Retriever, Multi-Query Retriever, and Ensemble Retriever for more accurate document retrieval.
-   - **Citation Extraction**: Uses `citation.py` to extract and format structured citations.
+### 3. Hybrid Retrieval Pipeline
+  - **Self-Query Retriever**: Filters results using document metadata (source, title, DOI).
+  - **Multi-Query Retriever**: Generates multiple sub-queries for diverse context.
+  - **Ensemble Retriever**: Combines and ranks results from multiple retrievers.
+  - **Contextual Compression**: Reranks/filters with Flashrank for focused context.
+  - **Iterative Retrieval**: Granular, document-by-document context retrieval.
 
-### 5. **Chat History Management**
-   - **Context-Aware Conversations**: Maintains chat history for relevant and coherent multi-turn dialogues.
-   - **Persistence**: Saves chat history as JSON files, ensuring continuity between sessions.
-   - **Search and Export**:
-     - Search past conversations by keywords.
-     - Export and backup chat history for future reference.
+### 4. Dynamic Schema Extraction
+  - Users define schema fields (UI form → snake_case enforced).
+  - **Dynamic Pydantic Model Generation**: Models built at runtime, stored per user/session in MongoDB.
+  - Automated prompt creation and mapping for LLMs.
+  - Schema selection and management via UI.
+
+### 5. RAG Pipeline & LLM Integration
+- **LLM Options**: Gemini (remote), HuggingFace (local), Ollama (local).
+- Prompts combine history, examples, context docs.
+- Output validated against user schema and linked to sources.
+- **Citation Extraction**: Kor-based pipeline, transparent citation mapping.
+
+### 6. Citation System (see `citation.py`)
+  - Citations include: `Source_ID`, `Article_ID` (UUID), snippet, title, source filename.
+  - Citations are validated via Pydantic and returned in structured JSON for transparency.
+
+### 7. MongoDB Data Management (see `db.py`)
+  - **User Model**: Handles OIDC user IDs, profile, dynamic schemas, chat sessions.
+  - **Dynamic Schema CRUD**: Add/remove/update runtime Pydantic schemas per user.
+  - **Chat History CRUD**: Multi-chat per user; titles, timestamps, export/import, deletion.
+  - **Citation Data**: All extracted data and citations can be traced to user and chat session.
 
 ### 6. **Analytics and Summarization**
    - **Conversation Summarization**: Compresses older messages into concise summaries using LLMs.
    - **Topic Modeling**: Extracts main topics using TF-IDF and NMF for better insight into chat history.
    - **Statistics**: Provides analytics like total messages, average message length, and distribution between human and AI messages.
 
-### 7. **Scientific Data Extraction**
-   - Supports queries to extract structured information like:
-     - **Input Data**: Materials, synthesis methods, electrode types, and thicknesses.
-     - **Output Data**: Switching types, endurance cycles, retention times, memory windows, and mechanisms.
-     - **Reference Information**: Paper title, DOI, publication year, and source file path.
+### 8. Chat History & Analytics (see `ChatHistory.py`)
+  - Persistent MongoDB multi-chat per user.
+  - Export/import, search, filter, anonymization, backup.
+  - Chat statistics, topic modeling, summarization.
 
-### 8. **Custom Enhancements**
-   - **Sensitive Data Handling**:
-     - Anonymizes chat history by masking emails, phone numbers, and names.
-   - **Backup and Restore**:
-     - Automatically backs up chat histories and allows restoration from backups.
-   - **Compression**:
-     - Reduces chat history size by summarizing older messages using LangChain's summarization chains.
-  
+### 9. Logging & Error Handling
+- Structured logging (file and console).
+- Automated log cleanup (logs older than 1 day w/o errors, or 3 days always).
+
+### 10. Streamlit App & UI
+- Navigation: login (OAuth), feature selection, schema form, chat/output.
+- Multi-user: profile, chat management, schema selection.
+- Dynamic forms for schema definition.
+- Contextual output and citation display.
 ### 9. **Logging & Error Handling**
   - Implements structured logging for debugging and performance monitoring.
   - Deletes old logs automatically if they do not contain errors.
   - If log is older than 3 days then it deletes the log even if log contain errors
+
+---
+
+## Dynamic Schema System (see `dynamic_schema.py`, `db.py`)
+
+- Users define extraction schema via Streamlit form.
+- System generates runtime Pydantic models for validation.
+- Models and prompts stored per user/session in MongoDB.
+- Schema can be updated, selected, or deleted.
+- Prompts and output mapping auto-generated for field extraction.
+
+**Example:**
+```python
+user_fields = {
+    'numeric_value': "Numeric value from paper.",
+    'switching_layer_material': "Material of switching layer.",
+    # ... more fields
+}
+dynamic_schema = DynamicGenSchema.create_model(user_fields)
+```
+- Output is schema-validated and mapped to field names in UI.
+
 
 ---
 
@@ -104,7 +176,14 @@ Need only if using `UnstructuredLoader`
 Place the research papers (PDFs) in a directory (default: `./PDF/`).
 
 ### Step 2: Add Your Gemini API Key
-Before running the system, ensure you have a valid Gemini API key in `gemini_key.txt`.
+Before running the system, ensure you have a valid Gemini API key in `.env`.
+```.env
+GEMINI_API_KEY=""
+MONGODB_URI="mongodb://127.0.0.1:27017/?directConnection=true&serverSelectionTimeoutMS=2000"
+USER_COLLECTION_NAME="users"
+CHAT_HISTORY_COLLECTION_NAME="chat_history"
+DATABASE_NAME="IRAG"
+```
 
 ### Step 3: Ollama Model download
 If model is not Downloaded then run the following command
@@ -115,19 +194,9 @@ Link to Download Ollama: [Ollama](https://ollama.com/)
 Execute the main script to start processing and querying:
 
 ```bash
-python main.py
+streamlit run app.py
 ```
-
-### Step 5: Query Examples
-Interact with the system using natural language queries. Examples include:
-- "Provide endurance cycles and retention time for a resistive switching device with p-type CuO."
-- "Analyze switching mechanisms for a device with 5000 nm CuO layers."
-- "Summarize memory characteristics of devices using TiO2 synthesized via PLD."
-
-### Step 6: Manage and Analyze Chat History
-- **Save history**: Automatically saves after every session.
-- **Search history**: Use keywords to find past interactions.
-- **Summarize history**: Summarize large histories for concise context.
+- **User Interface**: Login (Google OAuth), select features, define schema, upload PDFs, query RAG pipeline, view structured output and citations.
 
 ---
 
@@ -263,84 +332,89 @@ For citation response format:
 
 ```
 ---
+## Key Classes and Modules
 
-## Key Classes and Methods
+### `rag_assistant.py` (Core RAG Pipeline)
+- **`RAGChatAssistant`**: Main class orchestrating the RAG workflow.
+  - **Methods**:
+    - `create_vectors()`: Loads PDFs, chunks text, generates embeddings, and persists them in ChromaDB.
+    - `retrieve_context()`: Implements a hybrid retrieval system:
+      - **Self-Query Retriever**: Filters by metadata (source/title/DOI).
+      - **Multi-Query Retriever**: Expands queries for richer context.
+      - **Ensemble Retriever**: Combines multiple retrievers for robustness.
+      - **Contextual Compression**: Reranks and compresses for focused context.
+      - **Iterative Retrieval**: Optionally retrieves context per document.
+    - `generate_response()`: Runs LLM (Gemini/Ollama/HuggingFace) for schema-validated extraction.
+    - `create_prompt_template()`: Builds custom prompts from schema and chat context.
+    - `extract_citations()`: Uses Kor-based processing for citation-linked output.
 
-### **`rag_assistant.py (Core RAG System)`**
-- **`RAGChatAssistant`**: Handles document retrieval and response generation.
-- **`Methods:`**:
-    - `create_vectors()`: Processes PDFs, extracts text, generates embeddings, and stores them in ChromaDB.
-    - `retrieve_context()`: Implements Self-Query Retriever, Multi-Query Retriever, and Ensemble Retriever for accurate document retrieval.
-    - `generate_response()`: Uses ChatOllama or Gemini API to produce structured, schema-validated responses and extracts structured citations.
-    - `create_prompt_template()`: Generates contextual prompts for better response accuracy.
-    - `preprocess_text()`: Improved text processing and data normalization.
-    - `extract_citations()`: Uses Kor-based processing to extract citation data.
+### `document_loader.py`
+- **`DocLoader`**: Loads and parses PDFs.
+  - `pypdf_loader`: Fast for text-based PDFs.
+  - `unstructured_loader`: OCR for image-based or complex PDFs.
+  - `docling_loader`: Extracts metadata and structured content.
 
+### `dynamic_schema.py`
+- **`DynamicGenSchema`**: Builds Pydantic models at runtime from user-defined fields.
+  - `generate_dynamic_model()`: Creates extraction schema.
+  - `generate_data_objects_model()`: Wraps schema in a response model.
+  - `generate_dynamic_prompt()`: Generates instructions and mapping for LLM.
+  - `create_model()`: Factory for dynamic model instantiation.
 
-### **`document_loader.py`**
-- **`DocLoader`**: Handles PDF loading and parsing.
-  - `pypdf_loader`: Basic loader for text-heavy PDFs.
-  - `unstructured_loader`: Advanced OCR-based loader.
-  - `docling_loader`: Extracts structured metadata.
+### `db.py`
+- MongoDB handlers for persistent data:
+  - `create_user()`, `get_user()`, `update_chat_ids()`: OAuth user management.
+  - `get_pydantic_models()`, `update_pydantic_models()`, `delete_pydantic_model()`: Dynamic schema CRUD.
+  - `get_chat_titles_and_ids()`, `delete_chat_id()`, `delete_chat_session()`: Chat management.
+  - All user schemas and chats stored in MongoDB for multi-user support.
 
-### **`gemini_scheme.py`**
-- Defines response structure and ensures schema validation for Gemini API responses.
+### `ChatHistory.py`
+- **`ChatHistoryManager`**: Multi-chat management per user in MongoDB.
+  - **Initialization**: Loads/saves all user chats via MongoDB.
+  - **Methods**:
+    - `create_new_chat()`, `load_chat()`: Chat session management.
+    - `add_user_message()`, `add_ai_message()`, `add_citation_message()`: Adds messages (human, AI, citation).
+    - `get_message_history()`, `get_citation_message()`: Retrieves chat history for context or citation.
+    - `clear_history()`, `export_history()`, `list_user_histories()`: History management and analytics.
+    - **Analytics**: History size, topic modeling, summarization, anonymization.
 
-### **`textsplitter.py`**
-- **`ProcessText`**: Manages text splitting, embedding, and vector store creation.
-  - `splitter`: Splits documents into chunks.
-  - `embeded_documents`: Converts chunks into embeddings.
-  - `vectore_store`: Creates ChromaDB vector storage.
+### `textsplitter.py`
+- **`ProcessText`**: Text chunking and embedding pipeline.
+  - `splitter`: Recursive chunking of documents.
+  - `embeded_documents`: Generates embeddings for each chunk.
+  - `vectore_store`: Persists embeddings in ChromaDB.
 
-### **`scheme.py`**
-- Defines schemas for structured data extraction.
-  - Models include `Extract_Text` and `Data` for validated output.
+### `gemini_scheme.py`
+- Defines structured output schemas for Gemini LLM responses.
+  - **Models**: `Data_Objects`, other response models for validation.
 
-### **`citation.py`**
-- Defines schemas for structured citation extraction.
-  - Models include `Citation` and `Citations` for validated output.
+### `scheme.py`, `general_schema.py`
+- **Static Schemas**: Legacy Pydantic models for extraction and validation.
+  - **Models**: `Extract_Text`, `Data`, `General_Extract_Text` (numeric extraction).
 
-### **`main.py`**
-- Initializes RAGChatAssistant and executes sample queries.
-- Manages log cleanup and error handling.
+### `citation.py`
+- **Citation Models & Processing**:
+  - **`Citation`**: Model for individual citation (source ID, UUID, snippet, title, source).
+  - **`Citations`**: List of citations; provides `.to_json_string()` for output.
+  - Ensures transparent mapping from extracted data to original PDF source.
 
-### **`general_schema.py`**
-- Houses schemas for high-level text extraction.
-  - Models include `General_Extract_Text` for basic numeric value extraction.
-
-### **`ChatHistory.py`**
-- **`ChatHistoryManager`**: Manages user chat history and provides tools for context-aware conversation handling.
-  - **Initialization**:
-    - `__init__`: Sets up user-specific chat history, ensuring persistence in the `chat_histories` directory.
-  - **Chat Management**:
-    - `add_user_message`: Adds a human message to the history.
-    - `add_ai_message`: Adds an AI-generated response.
-    - `clear_history`: Deletes all messages in the chat history.
-    - `get_message_history`: Retrieves the last `n` messages in LangChain format.
-    - `compress_history`: Summarizes older messages to reduce storage size.
-  - **History Insights**:
-    - `analyze_history_stats`: Provides statistics, such as total messages, average lengths, and timestamps.
-    - `detect_conversation_topics`: Extracts key topics using TF-IDF and NMF.
-  - **Persistence**:
-    - `save_history`/`_save_history`: Saves history to a JSON file.
-    - `export_history`: Exports chat history to a specified path.
-    - `restore_from_backup`: Restores history from a backup file.
-  - **Search and Filtering**:
-    - `search_history`: Searches messages by keyword, with optional case sensitivity.
-    - `get_history_by_date_range`: Filters messages within a specific date range.
-  - **Privacy and Security**:
-    - `anonymize_history`: Redacts personal data (emails, phone numbers, and names).
-  - **Backup and Restore**:
-    - `backup_history`: Backs up chat history to a timestamped file.
-    - `import_history`: Imports chat history from a backup file.
+### UI Modules
+- **`app.py`**: Streamlit UI, navigation, session state, logging.
+- **`feature_selection.py`**: UI for choosing chat, structured or agenticRAG features.
+- **`form.py`**: UI form for dynamic schema definition.
+- **`structured_output.py`**: Output display and chat creation.
+- **`login.py`**: Google OAuth login, profile management.
+- **`utils.py`**: Utility helpers (profile, password hashing, etc).
 
 ---
 
 ## Future Work
 
 - Implement dynamic schema generation for custom queries.
-- Develop Full Stack Application with Frontend for user intreaction on the web.
-
+- AgenticRAG with live web search
+- Develop Full Stack Application with Frontend for user intreaction on the web using React, Django and FastAPI.
+- Enhanced analytics, team features
+- Additional LLMs/retrievers
 ---
 
 ## Contributing

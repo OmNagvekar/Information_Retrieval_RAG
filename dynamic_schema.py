@@ -6,8 +6,6 @@ import hashlib
 import streamlit as st
 logger = logging.getLogger(__name__)
 
-if len(st.session_state.global_variable)==0:
-    st.session_state.global_variable = []
 
 class DynamicGenSchema():
     
@@ -69,7 +67,6 @@ class DynamicGenSchema():
         
         # <--- Crucial step: add the dynamic class to the module’s globals.
         globals()[model_name] = DynamicData_Objects
-        st.session_state.global_variable.append({model_name:DynamicData_Objects})
         
         logger.debug("to_json_string method attached to Data_Objects model")
         
@@ -80,11 +77,6 @@ class DynamicGenSchema():
         """Factory method to return the generated Pydantic model."""
         instance = cls(fields)
         return instance.__pydantic_model
-    
-    def reintialize_global():
-        for dictionary in st.session_state.global_variable:
-            for key,value in dictionary:
-                globals()[key]=value
 # Example usage:
 if __name__ == "__main__":
     # Create an instance of the dynamically generated Data_Objects with one Extract_Data object.
