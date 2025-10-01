@@ -12,7 +12,7 @@ This project is a **Retrieval-Augmented Generation (RAG)** system designed to ex
 
 ## Workflow Overview
 
-![image](IRAG_Flowchart.png)
+![image](https://github.com/OmNagvekar/Information_Retrieval_RAG/blob/main/IRAG_Flowchart.png?raw=true)
 
 ### Step-by-step Pipeline:
 1. **PDF Upload**: Bulk import of research papers.
